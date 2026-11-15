@@ -1,0 +1,1994 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<title>DayZPulse — панель управления</title>
+<link rel="stylesheet" href="/assets/theme.css">
+<link rel="stylesheet" href="/assets/panel.css">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+</head>
+<body class="app">
+
+<!-- ===================== САЙДБАР ===================== -->
+<aside class="sidebar" id="sidebar">
+  <button class="collapse-btn" id="collapseBtn" type="button"
+          title="Свернуть/развернуть панель (Ctrl+B)" aria-label="Свернуть панель">&lt;</button>
+
+  <div class="brand">
+    <div class="logo" aria-hidden="true">DZ</div>
+    <div>
+      <b>DayZPulse</b>
+      <small id="serversSummary">серверов: 0</small>
+    </div>
+  </div>
+
+  <div class="sidegroup has-add">
+    <span>Мои серверы</span>
+    <button class="add" id="btnNewServer" type="button" title="Добавить сервер">+</button>
+  </div>
+  <div class="serverlist" id="serverList"></div>
+
+  <nav class="nav" id="nav">
+    <div class="nav-scroll">
+      <button type="button" data-view="servers" class="active" data-tip="Все серверы">
+        <span class="ic">▦</span><span class="nlabel">Все серверы</span></button>
+
+      <div class="sidegroup"><span>Панель</span></div>
+      <button type="button" data-view="dashboard" data-tip="Дашборд">
+        <span class="ic">▤</span><span class="nlabel">Дашборд</span></button>
+      <button type="button" data-view="console" data-tip="Консоль">
+        <span class="ic">▟</span><span class="nlabel">Консоль</span></button>
+      <button type="button" data-view="configs" data-tip="Конфигурация">
+        <span class="ic">⚙</span><span class="nlabel">Конфигурация</span></button>
+      <button type="button" data-view="mods" data-tip="Моды">
+        <span class="ic">⧉</span><span class="nlabel">Моды</span></button>
+      <button type="button" data-view="logs" data-tip="Логи">
+        <span class="ic">▤</span><span class="nlabel">Логи</span></button>
+
+      <div class="sidegroup"><span>Игроки</span></div>
+      <button type="button" data-view="players" data-tip="Игроки">
+        <span class="ic">☺</span><span class="nlabel">Игроки</span>
+        <span class="badge" id="playersBadge">0</span></button>
+      <button type="button" data-view="livemap" data-tip="Живая карта">
+        <span class="ic">⚑</span><span class="nlabel">Живая карта</span></button>
+      <button type="button" data-view="chat" data-tip="Чат">
+        <span class="ic">✉</span><span class="nlabel">Чат</span></button>
+      <button type="button" data-view="anticheat" data-tip="Античит">
+        <span class="ic">⛨</span><span class="nlabel">Античит</span></button>
+
+      <div class="sidegroup"><span>Данные</span></div>
+      <button type="button" data-view="backups" data-tip="Резервные копии">
+        <span class="ic">⛁</span><span class="nlabel">Резервные копии</span></button>
+      <button type="button" data-view="schedule" data-tip="Расписание">
+        <span class="ic">⏱</span><span class="nlabel">Расписание</span></button>
+    </div>
+
+    <!-- Система относится только к панели и не прокручивается. -->
+    <div class="nav-pinned">
+      <div class="sidegroup"><span>Система</span></div>
+      <button type="button" data-view="service" data-tip="Служба Windows">
+        <span class="ic">⚑</span><span class="nlabel">Служба</span></button>
+      <button type="button" data-view="settings" data-tip="Настройки">
+        <span class="ic">☰</span><span class="nlabel">Настройки</span></button>
+      <button type="button" data-view="security" data-tip="Безопасность">
+        <span class="ic">⛨</span><span class="nlabel">Безопасность</span></button>
+    </div>
+  </nav>
+
+  <div class="userbox" data-tip="Владелец панели">
+    <div class="av" id="userAvatar">–</div>
+    <div class="u"><span id="userLabel">владелец</span><small id="userRole">owner</small></div>
+    <button class="logout" id="logoutBtn" type="button" title="Выйти" aria-label="Выйти">⏻</button>
+  </div>
+</aside>
+
+<!-- ===================== ОСНОВНАЯ ЧАСТЬ ===================== -->
+<div class="main">
+  <header class="topbar">
+    <button class="btn ghost menu-btn" id="menuBtn" type="button" aria-label="Меню">☰</button>
+    <h1 id="pageTitle">Обзор</h1>
+    <span class="crumb hide-sm" id="pageCrumb">панель управления сервером</span>
+    <span class="spacer"></span>
+
+    <button class="btn hide-sm admins-btn" id="btnAdmins" type="button" title="Администраторы панели">👤 Администраторы</button>
+    <span class="pill hide-sm" id="statePill"><span class="dot" id="stateDot"></span><span id="stateText">Загрузка…</span></span>
+    <span class="pill hide-sm" id="pidPill"><span>Игроков</span><b id="statPlayersOnline">0</b></span>
+    <span class="tag off hide-sm" id="autoRestartTag">автоперезапуск: выкл.</span>
+    <span class="row hide-sm" style="gap:6px" id="headControls">
+      <button class="btn ghost sm" id="btnHeadStart" type="button" title="Запустить сервер">▶ Старт</button>
+      <button class="btn ghost sm" id="btnHeadStop" type="button" title="Остановить сервер">■ Стоп</button>
+      <button class="btn sm" id="btnQuickRestart" type="button" title="Перезапустить сервер">⟳ Рестарт</button>
+    </span>
+  </header>
+
+  <div class="content" id="content">
+
+    <!-- Пока сервер DayZ не установлен, разделы сервера недоступны. -->
+    <div id="serverGate" class="welcome hidden" style="display:none">
+      <div class="wicon" id="serverGateIcon">⬇</div>
+      <h2 id="serverGateTitle">Сервер DayZ не установлен</h2>
+      <p id="serverGateText">Скачайте сервер DayZ в папку этого сервера — после этого откроются
+        консоль, игроки, конфигурация и остальные разделы.</p>
+      <div class="node-progress hidden" id="serverGateBar">
+        <div class="node-progress-head">
+          <span class="node-progress-phase" id="serverGatePhase">подготовка</span>
+          <span class="node-progress-value" id="serverGateValue">0%</span>
+        </div>
+        <div class="node-progress-rail"><i id="serverGateFill" style="width:0%"></i></div>
+      </div>
+      <div class="wactions">
+        <button class="btn primary" type="button" id="serverGateDownload">Скачать сервер</button>
+        <button class="btn" type="button" id="serverGateServers">← Все серверы</button>
+      </div>
+    </div>
+
+    <!-- ==================== ВСЕ СЕРВЕРЫ ==================== -->
+    <section class="view active" id="view-servers">
+      <div id="ovWelcome" class="welcome" style="display:none">
+        <div class="wicon">🖥</div>
+        <h2>Добро пожаловать в DayZPulse</h2>
+        <p>Серверов пока нет. Добавьте первый сервер DayZ — панель подключится к нему,
+           покажет игроков, консоль, конфиги и резервные копии.</p>
+        <div class="wactions">
+          <button class="btn primary" type="button" id="btnWelcomeAdd">＋ Добавить сервер</button>
+        </div>
+        <div class="wsteps">
+          <div class="wstep"><div class="n">1</div><b>Добавьте сервер</b>
+            <small>Название, папка с сервером и порт.</small></div>
+          <div class="wstep"><div class="n">2</div><b>Подключите мод</b>
+            <small>Панель сама создаст config.json для @DayZPulse.</small></div>
+          <div class="wstep"><div class="n">3</div><b>Управляйте</b>
+            <small>Игроки, лут, погода, бэкапы и расписание — в одном месте.</small></div>
+        </div>
+      </div>
+
+      <div id="ovStats">
+        <div class="grid-4" style="margin-bottom:16px">
+          <div class="card stat" style="--nh:rgba(63,185,80,.24);--nh2:#3fb950">
+            <span class="k">Всего серверов</span><span class="v" id="ovTotal">0</span></div>
+          <div class="card stat" style="--nh:rgba(74,144,217,.24);--nh2:#4a90d9">
+            <span class="k">Работает</span><span class="v" id="ovOnline">0</span></div>
+          <div class="card stat" style="--nh:rgba(217,169,74,.24);--nh2:#d9a94a">
+            <span class="k">Игроков онлайн</span><span class="v" id="ovPlayers">0</span></div>
+          <div class="card stat" style="--nh:rgba(163,113,247,.24);--nh2:#a371f7">
+            <span class="k">Мод на связи</span><span class="v" id="ovTrackers">0</span></div>
+        </div>
+
+        <div class="bp-tools">
+          <span class="muted" style="font-size:12.5px">
+            Тяните карточки · колесо = зум · тянуть пустое место = сдвиг · двойной щелчок — сброс
+          </span>
+          <span style="flex:1"></span>
+          <button class="btn sm" type="button" id="bpZoomReset">100%</button>
+          <button class="btn sm" type="button" id="bpResetNodes">↺ Сбросить ноды</button>
+        </div>
+
+        <div class="bp-stage pannable" id="bpStage">
+          <div class="bp-grid" id="bpGrid"></div>
+          <div class="srv-cards" id="srvCards"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== ДАШБОРД ==================== -->
+    <section class="view" id="view-dashboard">
+      <div class="dash-stats">
+        <div class="card stat" style="--nh:rgba(63,185,80,.24);--nh2:#3fb950">
+          <span class="k">Игроков онлайн</span>
+          <span class="v"><span id="dashOnline">0</span> <small>/ <span id="dashSlots">0</span></small></span>
+          <div class="bar"><i id="dashOnlineBar" style="width:0%"></i></div>
+        </div>
+        <div class="card stat fps-card" style="--nh:rgba(74,144,217,.24);--nh2:#4a90d9">
+          <span class="k">FPS сервера</span>
+          <span class="v" id="dashFps">—</span>
+          <svg class="fps-chart" id="dashFpsSpark" viewBox="0 0 240 70" preserveAspectRatio="none"></svg>
+        </div>
+        <div class="card stat" style="--nh:rgba(53,184,196,.24);--nh2:#35b8c4">
+          <span class="k">Пинг (средний)</span>
+          <span class="v" id="dashPing">—</span>
+          <svg class="spark" id="dashPingSpark" viewBox="0 0 120 40" preserveAspectRatio="none"></svg>
+        </div>
+        <div class="card stat" style="--nh:rgba(163,113,247,.24);--nh2:#a371f7">
+          <span class="k">Аптайм</span><span class="v" id="dashUptime">—</span>
+          <span class="muted" style="font-size:12px" id="dashStartedAt">с последнего рестарта</span>
+        </div>
+      </div>
+
+      <div class="dash-mid">
+        <div class="card" style="--nh:rgba(63,185,80,.20);--nh2:#3fb950">
+          <h2><span class="ic">📈</span>Онлайн за 24 часа</h2>
+          <svg class="chart-svg" id="dashOnlineChart" viewBox="0 0 700 110" preserveAspectRatio="none"></svg>
+          <div class="chart-axis">
+            <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>сейчас</span>
+          </div>
+          <div class="muted" id="dashOnlineEmpty" style="display:none;font-size:12.5px">
+            История набирается — появятся точки по мере работы сервера (замер раз в 5 минут).
+          </div>
+        </div>
+        <div class="card" style="--nh:rgba(74,144,217,.20);--nh2:#4a90d9">
+          <h2><span class="ic">🖥</span>Ресурсы сервера</h2>
+          <div style="margin-bottom:14px">
+            <div class="res-row"><span>CPU</span><b id="dashCpuVal">—</b></div>
+            <div class="bar"><i class="blue" id="dashCpuBar" style="width:0%"></i></div>
+          </div>
+          <div style="margin-bottom:14px">
+            <div class="res-row"><span>Память</span><b id="dashRamVal">—</b></div>
+            <div class="bar"><i id="dashRamBar" style="width:0%"></i></div>
+          </div>
+          <div style="margin-bottom:14px">
+            <div class="res-row"><span>Диск</span><b id="dashDiskVal">—</b></div>
+            <div class="bar"><i class="warn" id="dashDiskBar" style="width:0%"></i></div>
+          </div>
+          <div>
+            <div class="res-row"><span>Потоки</span><b id="dashThreadsVal">—</b></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="dash-bottom">
+        <div class="card" style="--nh:rgba(163,113,247,.20);--nh2:#a371f7">
+          <h2><span class="ic">👥</span>Последние события игроков</h2>
+          <div id="dashEvents" class="dash-events"></div>
+        </div>
+        <div class="card" style="--nh:rgba(217,169,74,.20);--nh2:#d9a94a">
+          <h2><span class="ic">⚡</span>Быстрые действия</h2>
+          <div class="dash-actions">
+            <button class="btn primary" id="btnStart" type="button">▶ Запустить сервер</button>
+            <button class="btn" id="btnRestart" type="button">↻ Перезапустить</button>
+            <button class="btn danger" id="btnStop" type="button">■ Остановить</button>
+            <button class="btn" id="btnQuickBroadcast" type="button">📢 Broadcast</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== КОНСОЛЬ (RCON) ==================== -->
+    <section class="view" id="view-console">
+      <div class="card">
+        <h2><span class="ic">▟</span>RCON-консоль сервера</h2>
+        <div class="row between" style="margin-bottom:10px">
+          <div class="row" style="gap:10px">
+            <span class="tag off" id="rconStatusTag">RCON: отключено</span>
+            <span class="muted mono" style="font-size:11.5px" id="rconAddress">—</span>
+          </div>
+          <div class="row">
+            <label class="check"><input type="checkbox" id="autoscroll" checked> Автопрокрутка</label>
+            <button class="btn ghost sm" id="btnRconReconnect" type="button">Переподключить</button>
+            <button class="btn ghost sm" id="btnClearConsole" type="button">Очистить</button>
+          </div>
+        </div>
+        <pre class="console" id="console" aria-live="polite"></pre>
+        <div class="row" style="margin-top:12px">
+          <input type="text" id="commandInput" class="grow"
+                 placeholder="Команда RCON (например: players, say -1 Привет, kick 1)"
+                 autocomplete="off" maxlength="500">
+          <button class="btn primary" id="btnSend" type="button">Отправить</button>
+        </div>
+        <div class="help" id="rconHelp">
+          Команды выполняются через BattlEye RCON. Порт и пароль берутся из
+          <span class="mono">battleye\beserver_x64.cfg</span>; при первом запуске панель создаёт их сама.
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== КОНФИГУРАЦИЯ ==================== -->
+    <section class="view" id="view-configs">
+      <div id="quickGrid" class="quick-grid">
+
+        <!-- ---- сервер ---- -->
+        <div class="card quick-card" style="--nh:rgba(63,185,80,.20);--nh2:#3fb950" data-card="server">
+          <div class="qc-head">
+            <h2><span class="ic">⚙</span>Сервер</h2>
+            <span class="qc-dirty" data-dirty="server" title="Есть несохранённые изменения"></span>
+            <button class="btn ghost sm" type="button" data-advanced="server">Расширенные…</button>
+          </div>
+
+          <div class="qc-summary">
+            <div class="qc-stat"><span class="k">Название</span><b data-view="qcHostname">—</b></div>
+            <div class="qc-stat"><span class="k">Слоты</span><b data-view="qcMaxPlayers">—</b></div>
+            <div class="qc-stat"><span class="k">RCON</span><b data-view="qcRconEnabled">—</b></div>
+          </div>
+
+          <div class="grid2">
+            <label class="field"><span>Название</span>
+              <input type="text" id="qcHostname" maxlength="120" data-field="server"></label>
+            <label class="field"><span>Слоты</span>
+              <input type="number" id="qcMaxPlayers" min="1" max="200" data-field="server"></label>
+          </div>
+
+          <label class="sw-row" style="margin-bottom:12px">
+            <span>Включить RCON</span>
+            <span class="sw"><input type="checkbox" id="qcRconEnabled" data-field="server"><span></span></span>
+          </label>
+
+          <div class="help">Полные параметры — в «Расширенные…».</div>
+        </div>
+
+        <!-- ---- погода ---- -->
+        <div class="card quick-card" style="--nh:rgba(53,184,196,.20);--nh2:#35b8c4" data-card="weather">
+          <div class="qc-head">
+            <h2><span class="ic">🌦</span>Погода</h2>
+            <span class="qc-dirty" data-dirty="weather" title="Есть несохранённые изменения"></span>
+            <button class="btn ghost sm" type="button" data-advanced="weather">Расширенные…</button>
+          </div>
+
+          <label class="sw-row" style="margin-bottom:12px">
+            <span>Применять погоду</span>
+            <span class="sw"><input type="checkbox" id="qwEnabled" data-field="weather"><span></span></span>
+          </label>
+
+          <div class="qc-preview" id="qcWeatherPreview" aria-hidden="true">
+            <span class="qc-cloud"></span>
+            <span class="qc-cloud qc-cloud2"></span>
+            <span class="qc-rain"></span>
+            <span class="qc-snow"></span>
+            <span class="qc-sun">☀</span>
+            <span class="qc-bolt">⚡</span>
+            <span class="qc-label" id="qcWeatherLabel">облачно</span>
+          </div>
+
+          <div class="qc-presets" id="qcWeatherPresets">
+            <button class="btn sm" type="button" data-weather="clear">Ясно</button>
+            <button class="btn sm" type="button" data-weather="cloudy">Облачно</button>
+            <button class="btn sm" type="button" data-weather="rain">Дождь</button>
+            <button class="btn sm" type="button" data-weather="storm">Гроза</button>
+            <button class="btn sm" type="button" data-weather="fog">Туман</button>
+          </div>
+
+          <div class="sliders">
+            <label class="slide"><span>Облачность</span><b data-out="overcast">45%</b>
+              <input type="range" id="qwOvercast" min="0" max="100" value="45" data-field="weather"></label>
+            <label class="slide"><span>Дождь</span><b data-out="rain">0%</b>
+              <input type="range" id="qwRain" min="0" max="100" value="0" data-field="weather"></label>
+          </div>
+        </div>
+
+        <!-- ---- мир ---- -->
+        <div class="card quick-card" style="--nh:rgba(163,113,247,.20);--nh2:#a371f7" data-card="gameplay">
+          <div class="qc-head">
+            <h2><span class="ic">🌍</span>Мир</h2>
+            <span class="qc-dirty" data-dirty="gameplay" title="Есть несохранённые изменения"></span>
+            <button class="btn ghost sm" type="button" data-advanced="gameplay">Расширенные…</button>
+          </div>
+
+          <div class="qc-summary">
+            <div class="qc-stat"><span class="k">Урон по строениям</span><b data-view="qmBaseDamage">—</b></div>
+            <div class="qc-stat"><span class="k">Ночное освещение</span><b data-view="qmLighting">—</b></div>
+            <div class="qc-stat"><span class="k">Стамина</span><b data-view="qmStamina">—</b></div>
+          </div>
+
+          <div class="qc-switches">
+            <label class="sw-row">
+              <span>Урон по строениям</span>
+              <span class="sw"><input type="checkbox" id="qmBaseDamage" data-field="gameplay"><span></span></span>
+            </label>
+            <label class="sw-row">
+              <span>Личный источник света</span>
+              <span class="sw"><input type="checkbox" id="qmPersonalLight" data-field="gameplay"><span></span></span>
+            </label>
+            <label class="sw-row">
+              <span>Читать cfggameplay.json</span>
+              <span class="sw"><input type="checkbox" id="qmEnableGameplay" data-field="gameplay"><span></span></span>
+            </label>
+          </div>
+
+          <!-- Настройки мира без флага enableCfgGameplayFile не применяются. -->
+          <div class="qc-warn hidden" id="qmWarn">
+            <span class="qc-warn-icon">⚠</span>
+            <div>
+              <b>Файл мира не включён</b>
+              <small>DayZ не читает <span class="mono">cfggameplay.json</span>, пока в
+                <span class="mono">serverDZ.cfg</span> нет <span class="mono">enableCfgGameplayFile = 1</span>.
+                Включите тумблер <span class="mono">Читать cfggameplay.json</span> выше — или нажмите «Включить».</small>
+            </div>
+            <button class="btn sm" type="button" id="qmEnableFile">Включить</button>
+          </div>
+
+          <div class="help">Полные параметры — в «Расширенные…».</div>
+        </div>
+
+        <!-- ---- население и очистка (globals.xml) ---- -->
+        <div class="card quick-card" style="--nh:rgba(217,169,74,.20);--nh2:#d9a94a" data-card="globals">
+          <div class="qc-head">
+            <h2><span class="ic">🗺</span>Население и очистка</h2>
+            <span class="qc-dirty" data-dirty="globals" title="Есть несохранённые изменения"></span>
+            <button class="btn ghost sm" type="button" data-advanced="globals">Расширенные…</button>
+          </div>
+
+          <div class="grid2">
+            <label class="field"><span>Максимум зомби</span>
+              <input type="number" id="qgZombieMax" min="0" max="100000" data-field="globals"></label>
+            <label class="field"><span>Максимум животных</span>
+              <input type="number" id="qgAnimalMax" min="0" max="100000" data-field="globals"></label>
+          </div>
+
+          <div class="help">Файл <span class="mono">db/globals.xml</span> миссии. Остальное — в «Расширенные…».</div>
+        </div>
+      </div>
+
+      <div class="row between" id="quickActions" style="margin-bottom:16px">
+        <span class="tag off" id="quickApplyHint">остановите сервер, чтобы менять настройки</span>
+        <span class="row" style="gap:10px">
+          <span class="muted mono" id="quickPaths" style="font-size:11px"></span>
+          <button class="btn" id="btnQuickReload" type="button">Сбросить</button>
+          <button class="btn primary" id="btnQuickSave" type="button">Сохранить настройки</button>
+        </span>
+      </div>
+
+      <!-- Связь с модом: показывается только если мод установлен на сервере. -->
+      <div class="config-cards">
+      <div class="card hidden" id="trackerCard">
+        <div class="qc-head">
+          <h2><span class="ic">⚙</span>Связь с модом</h2>
+        </div>
+
+        <!-- Мод не установлен: предлагаем установить. -->
+        <div class="mods-empty" id="trackerCardMissing">
+          <div class="mods-empty-icon">⧉</div>
+          <b>Мод DayZPulse не установлен</b>
+          <p class="muted">Связь, игроки и живая карта работают только с установленным модом.</p>
+          <button class="btn primary" id="trackerCardInstall" type="button">Установить мод</button>
+        </div>
+
+        <!-- Мод установлен: настройки связи. -->
+        <div id="trackerCardSettings" class="hidden">
+          <div class="form-grid">
+            <div class="field">
+              <label for="trackerServerId">Идентификатор сервера</label>
+              <input type="text" id="trackerServerId" spellcheck="false" maxlength="48" placeholder="dayz">
+            </div>
+            <div class="field">
+              <label for="trackerStale">Считать данные устаревшими, с</label>
+              <input type="number" id="trackerStale" min="5" max="600">
+            </div>
+            <div class="field">
+              <label for="trackerRetention">Хранить историю, дней</label>
+              <input type="number" id="trackerRetention" min="1" max="365">
+            </div>
+            <div class="field">
+              <label for="trackerProfiles">Каталог profiles (пусто = рабочий каталог)</label>
+              <input type="text" id="trackerProfiles" spellcheck="false">
+            </div>
+          </div>
+
+          <dl class="kv" style="margin:14px 0">
+            <dt>Состояние связи</dt><dd><span class="tag off" id="trackerStateTag">нет связи</span></dd>
+            <dt>Токен мода</dt><dd class="mono" id="trackerToken">—</dd>
+            <dt>config.json мода</dt><dd class="mono" id="trackerModPath">—</dd>
+          </dl>
+
+          <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px">
+            <label class="check"><input type="checkbox" id="trackerEnabled"> Принимать данные от мода</label>
+            <label class="check"><input type="checkbox" id="trackerAutoConfig"> Автоматически писать config.json в профили сервера</label>
+          </div>
+
+          <div class="row">
+            <button class="btn primary sm" id="trackerSave" type="button">Сохранить настройки связи</button>
+            <button class="btn sm" id="trackerRotate" type="button">Создать новый токен</button>
+          </div>
+          <div class="help" id="trackerState">—</div>
+        </div>
+      </div>
+
+      <!-- Параметры запуска сервера. -->
+      <div class="card" id="launchCard">
+        <div class="qc-head">
+          <h2><span class="ic">▶</span>Параметры запуска</h2>
+          <span class="qc-dirty" data-dirty="launch" title="Есть несохранённые изменения"></span>
+          <button class="btn ghost sm" type="button" id="launchAdvanced">Расширенные…</button>
+        </div>
+
+        <div class="field" style="margin-bottom:12px">
+          <label for="launchArgs">Аргументы запуска</label>
+          <textarea id="launchArgs" class="small-area" spellcheck="false" rows="2"
+                    placeholder="-config={config} -port={port} -profiles={profiles} -dologs -adminlog -netlog -freezecheck"></textarea>
+          <div class="help">
+            Токены: <span class="mono">{exe}</span>, <span class="mono">{workingDir}</span>,
+            <span class="mono">{port}</span>, <span class="mono">{config}</span>,
+            <span class="mono">{profiles}</span>, <span class="mono">{mods}</span>,
+            <span class="mono">{servermods}</span>.
+          </div>
+        </div>
+
+        <div class="field" style="margin-bottom:12px">
+          <label for="launchExtra">Дополнительные аргументы</label>
+          <input type="text" id="launchExtra" spellcheck="false" placeholder="-noPause">
+        </div>
+
+        <dl class="kv" style="margin:14px 0">
+          <dt>Порт</dt><dd class="mono" id="launchPort">—</dd>
+          <dt>Клиентские (-mod=)</dt><dd class="mono" id="launchMods">—</dd>
+          <dt>Серверные (-serverMod=)</dt><dd class="mono" id="launchServerMods">—</dd>
+          <dt>Итоговая команда</dt><dd class="mono" id="launchCommand" style="word-break:break-all">—</dd>
+        </dl>
+
+        <div class="row between">
+          <span class="tag off" id="launchHint">—</span>
+          <span class="row" style="gap:10px">
+            <button class="btn" id="launchReload" type="button">Сбросить</button>
+            <button class="btn primary" id="launchSave" type="button">Сохранить</button>
+          </span>
+        </div>
+      </div>
+      </div>
+    </section>
+
+    <!-- ============ РАСШИРЕННЫЕ ПАРАМЕТРЫ ЗАПУСКА ============ -->
+    <div class="overlay" id="launchModal">
+      <div class="modal adv-modal" role="dialog" aria-modal="true" aria-labelledby="launchModalTitle">
+        <div class="mhead">
+          <span class="adv-icon">▶</span>
+          <b id="launchModalTitle">Расширенные параметры запуска</b>
+          <button class="x" id="launchModalX" type="button" aria-label="Закрыть">×</button>
+        </div>
+        <div class="mbody" id="launchModalBody"></div>
+        <div class="mfoot">
+          <span class="qc-dirty-text" id="launchModalNote">переключатели добавят аргументы в «Дополнительные»</span>
+          <span class="spacer" style="flex:1"></span>
+          <button class="btn ghost" id="launchModalReset" type="button">Сбросить все</button>
+          <button class="btn primary" id="launchModalApply" type="button">Применить</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ РАСШИРЕННЫЕ НАСТРОЙКИ ============ -->
+    <div class="overlay" id="advModal">
+      <div class="modal adv-modal" role="dialog" aria-modal="true" aria-labelledby="advTitle">
+        <div class="mhead">
+          <span class="adv-icon" id="advIcon">⚙</span>
+          <b id="advTitle">Расширенные настройки</b>
+          <button class="x" id="advX" type="button" aria-label="Закрыть">×</button>
+        </div>
+        <div class="mbody" id="advBody"></div>
+        <div class="mfoot">
+          <span class="qc-dirty-text" id="advDirty">изменений нет</span>
+          <span class="spacer" style="flex:1"></span>
+          <button class="btn ghost" id="advReset" type="button">Сбросить раздел</button>
+          <button class="btn primary" id="advApply" type="button">Применить</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== МОДЫ ==================== -->
+    <section class="view" id="view-mods">
+      <div id="modsContent">
+        <!-- Шапка с действиями -->
+        <div class="row between" style="margin-bottom:14px">
+          <div>
+            <h2 style="margin:0;border:0;padding:0;background:none;display:flex;align-items:center;gap:8px"><span class="ic">⧉</span><span>Моды сервера</span></h2>
+            <div class="muted" style="font-size:12.5px">
+              Моды из Steam Workshop и локальные папки. При установке панель соберёт параметры <span class="mono">-mod=</span>.
+            </div>
+          </div>
+          <div class="row" style="gap:8px">
+            <button class="btn ghost sm" id="modsSettingsBtn" type="button" title="Настройки модов">⚙</button>
+            <button class="btn sm" id="modsAddLocal" type="button">＋ Локальный мод</button>
+            <button class="btn sm" id="modsAdd" type="button">＋ Из Workshop</button>
+            <button class="btn primary sm" id="modsInstallAll" type="button">Установить / обновить</button>
+          </div>
+        </div>
+
+        <!-- Прогресс установки -->
+        <div class="card" id="modsProgressCard" style="margin-bottom:14px;display:none">
+          <div class="node-progress">
+            <div class="node-progress-head">
+              <span class="node-progress-phase" id="modsPhase">подготовка</span>
+              <span class="node-progress-value" id="modsPercent">0%</span>
+            </div>
+            <div class="node-progress-rail"><i id="modsFill" style="width:0%"></i></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <table class="table">
+            <thead>
+            <tr>
+              <th></th><th>Мод</th><th>Источник</th><th>Тип</th><th>Папка</th>
+              <th>Автообновл.</th><th>Состояние</th><th></th>
+            </tr>
+            </thead>
+            <tbody id="modRows"></tbody>
+          </table>
+          <div class="help" id="modsEmptyHint" style="display:none">
+            Модов пока нет. Нажмите «Из Workshop», вставьте ссылку на мод и добавьте его в список.
+          </div>
+        </div>
+
+        <!-- Наш собственный мод DayZPulse — отдельной карточкой. -->
+        <div class="card" style="margin-top:16px">
+          <div class="qc-head">
+            <h2><span class="ic">⧉</span>Мод DayZPulse <span class="muted" style="font-size:12px;font-weight:400">(наш)</span></h2>
+            <span class="qc-dirty" data-dirty="panelmod" title="Есть обновление"></span>
+            <button class="btn ghost sm" id="panelModUrlBtn" type="button" title="Адрес сайта с модом">⚙</button>
+          </div>
+
+          <!-- Мод не установлен. -->
+          <div class="mods-empty" id="modsGate">
+            <div class="mods-empty-icon">⧉</div>
+            <b>Мод DayZPulse не установлен</b>
+            <p class="muted">
+              Мод передаёт в панель данные об игроках, транспорте и объектах мира.
+              Без него недоступны разделы «Игроки», «Живая карта», «Чат» и «Античит».
+            </p>
+            <button class="btn primary" id="modsInstall" type="button">Скачать и установить</button>
+            <div class="help" id="modsInstallHint" style="margin-top:10px"></div>
+          </div>
+
+          <!-- Мод установлен. -->
+          <div id="modsOwnInfo" class="hidden">
+            <dl class="kv" style="margin:14px 0">
+              <dt>Версия</dt><dd class="mono" id="panelModVersion">—</dd>
+              <dt>На сайте</dt><dd class="mono" id="panelModRemote">—</dd>
+              <dt>config.json</dt><dd class="mono" id="modConfigPath2">—</dd>
+              <dt>Параметры запуска</dt><dd class="mono" id="modLaunchMods">—</dd>
+            </dl>
+            <div class="row">
+              <button class="btn primary sm" id="panelModUpdate" type="button">Проверить и обновить</button>
+              <button class="btn sm" id="modsOpenConfig" type="button">Настроить связь</button>
+            </div>
+            <div class="help" id="panelModStatus" style="margin-top:10px">—</div>
+          </div>
+
+          <!-- Прогресс скачивания мода панели. -->
+          <div class="node-progress hidden" id="panelModBar" style="margin-top:12px">
+            <div class="node-progress-head">
+              <span class="node-progress-phase" id="panelModPhase">подготовка</span>
+              <span class="node-progress-value" id="panelModPercent">0%</span>
+            </div>
+            <div class="node-progress-rail"><i id="panelModFill" style="width:0%"></i></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== ЛОГИ ==================== -->
+    <section class="view" id="view-logs">
+      <div class="card">
+        <div class="qc-head">
+          <h2><span class="ic">▤</span>Логи сервера</h2>
+          <span class="muted mono" id="logsDirectory" style="font-size:11px;margin-right:auto"></span>
+          <button class="btn ghost sm" id="logsSettingsBtn" type="button" title="Настройки бэкапов логов">⚙</button>
+          <button class="btn sm" id="logsBackup" type="button">Резервная копия логов</button>
+          <button class="btn sm" id="logsRefresh" type="button">Обновить</button>
+        </div>
+
+        <div class="logs-layout">
+          <!-- Список файлов -->
+          <div class="logs-list" id="logFiles"></div>
+
+          <!-- Просмотр содержимого -->
+          <div class="logs-view">
+            <div class="row between" style="margin-bottom:8px;gap:10px">
+              <b id="logTitle">Выберите лог</b>
+              <span class="row" style="gap:8px">
+                <input type="text" id="logFilter" placeholder="Фильтр" style="width:160px">
+                <select id="logTail" style="width:auto">
+                  <option value="200">200 строк</option>
+                  <option value="500" selected>500 строк</option>
+                  <option value="1000">1000 строк</option>
+                  <option value="3000">3000 строк</option>
+                </select>
+                <label class="check"><input type="checkbox" id="logFollow" checked> Следить</label>
+                <button class="btn ghost sm" id="logDownload" type="button">Скачать</button>
+              </span>
+            </div>
+            <pre class="console log-view" id="logContent" aria-live="polite"></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Команды мода: перенесены сюда карточкой. -->
+      <div class="card" style="margin-top:16px">
+        <div class="row between" style="margin-bottom:12px">
+          <h2 style="margin:0;border:0;padding:0;background:none"><span class="ic">⌘</span>Команды мода</h2>
+          <span class="row" style="gap:8px">
+            <button class="btn ghost sm" id="commandsRefresh" type="button">Обновить</button>
+            <button class="btn danger sm" id="commandsClear" type="button">Очистить очередь</button>
+          </span>
+        </div>
+        <div class="help" style="margin-bottom:10px">
+          Команды выдаются моду в течение секунды и подтверждаются обратно.
+        </div>
+        <table class="table">
+          <thead><tr><th>№</th><th>Действие</th><th>Аргументы</th><th>Статус</th><th>Создана</th><th>Ответ мода</th></tr></thead>
+          <tbody id="commandRowsLogs"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ==================== ИГРОКИ ==================== -->
+    <section class="view" id="view-players">
+      <div class="grid-4" style="margin-bottom:16px">
+        <div class="card stat" style="--nh:rgba(63,185,80,.24);--nh2:#3fb950">
+          <span class="k">Сейчас онлайн</span><span class="v" id="statPlayersOnlineCard">0</span>
+          <span class="muted" style="font-size:12px" id="playersConnection">нет данных от мода</span>
+        </div>
+        <div class="card stat" style="--nh:rgba(74,144,217,.24);--nh2:#4a90d9">
+          <span class="k">Всего игроков</span><span class="v" id="dbTotal">0</span>
+          <span class="muted" style="font-size:12px">в базе панели</span>
+        </div>
+        <!-- Стартовый набор: то, что получает каждый новый игрок. -->
+        <div class="card stat" style="--nh:rgba(217,169,74,.24);--nh2:#d9a94a">
+          <span class="k">Стартовый набор</span>
+          <span class="v" id="spawnKitCount">0</span>
+          <span class="muted" style="font-size:12px" id="spawnKitHint">предметов для новых игроков</span>
+          <button class="btn primary sm" id="spawnKitEdit" type="button" style="margin-top:10px;align-self:flex-start">Редактор набора</button>
+        </div>
+
+        <!-- Пресеты: выдача конкретным игрокам на время. -->
+        <div class="card stat" style="--nh:rgba(163,113,247,.24);--nh2:#a371f7">
+          <span class="k">Пресеты</span>
+          <span class="v" id="presetCount">0</span>
+          <span class="muted" style="font-size:12px" id="presetHint">наборов для выдачи</span>
+          <button class="btn primary sm" id="presetEdit" type="button" style="margin-top:10px;align-self:flex-start">Редактор пресетов</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="subnav" id="playersTabs" style="margin-bottom:14px">
+          <button class="subtab active" data-players-panel="live" type="button">Сейчас онлайн</button>
+          <button class="subtab" data-players-panel="database" type="button">База игроков</button>
+        </div>
+
+        <!-- онлайн -->
+        <div class="players-panel" id="players-panel-live">
+          <div class="row between" style="margin-bottom:12px">
+            <span class="muted" style="font-size:12.5px">
+              Данные приходят от мода DayZPulse каждые 2 секунды.
+            </span>
+            <span class="row" style="gap:8px">
+              <button class="btn ghost sm" id="playersDemo" type="button">Тестовый игрок</button>
+              <button class="btn ghost sm" id="playersRefresh" type="button">Обновить</button>
+            </span>
+          </div>
+          <table class="table">
+            <thead>
+            <tr><th>Имя</th><th>SteamID64</th><th>Пинг</th><th>IP</th><th>Здоровье</th><th>Позиция</th><th>Обновлено</th><th class="actions"></th></tr>
+            </thead>
+            <tbody id="liveRows"></tbody>
+          </table>
+        </div>
+
+        <!-- база -->
+        <div class="players-panel hidden" id="players-panel-database">
+          <div class="row between" style="margin-bottom:12px">
+            <div class="row">
+              <input type="text" id="dbSearch" placeholder="Поиск по имени, SteamID, BI id или заметке"
+                     style="min-width:280px" maxlength="80">
+              <label class="check"><input type="checkbox" id="dbWatchOnly"> Только наблюдение</label>
+              <select id="dbSort" style="width:auto">
+                <option value="lastSeen">Сортировка: по последнему входу</option>
+                <option value="playtime">по наигранному</option>
+                <option value="kills">по убийствам</option>
+                <option value="kd">по K/D</option>
+                <option value="sessions">по сессиям</option>
+              </select>
+            </div>
+            <button class="btn ghost sm" id="dbExport" type="button">Экспорт CSV</button>
+          </div>
+          <table class="table">
+            <thead>
+            <tr><th></th><th>Имя</th><th>SteamID64</th><th>Последний вход</th><th>Сессий</th>
+              <th>Наиграно</th><th>Убийств</th><th>Смертей</th><th>K/D</th></tr>
+            </thead>
+            <tbody id="dbRows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== ЖИВАЯ КАРТА ==================== -->
+    <section class="view" id="view-livemap">
+      <div class="card">
+        <div class="row between" style="margin-bottom:12px">
+          <div>
+            <h2 style="margin:0;border:0;padding:0;background:none"><span class="ic">⚑</span>Живая карта <span id="mapTitle">DayZ</span></h2>
+            <div class="muted" style="font-size:12.5px">Позиции игроков и транспорта обновляются каждые 2 секунды</div>
+          </div>
+          <div class="row" style="gap:8px">
+            <button class="btn ghost sm" id="mapLayerBtn" type="button" title="Переключить слой">Спутник</button>
+            <span class="pill"><span class="dot" id="mapDot"></span><span id="mapState">нет данных</span></span>
+          </div>
+        </div>
+
+        <div class="map-wrap" id="mapWrap">
+          <div id="mapTiles" class="map-tiles"></div>
+          <svg id="liveMapSvg" viewBox="0 0 15360 15360" preserveAspectRatio="xMidYMid meet" class="live-map">
+            <g id="liveMapVehicles"></g>
+            <g id="liveMapObjects"></g>
+            <g id="liveMapPlayers"></g>
+          </svg>
+          <div class="map-zoom">
+            <button type="button" id="mapZoomIn" title="Приблизить">+</button>
+            <button type="button" id="mapZoomOut" title="Отдалить">−</button>
+            <button type="button" id="mapReset" title="К центру">⤢</button>
+          </div>
+
+          <!-- Фильтры слоёв карты -->
+          <div class="map-filters" id="mapFilters">
+            <button type="button" class="map-filter-btn" id="mapFiltersToggle" title="Слои">☰</button>
+            <div class="map-filters-list hidden" id="mapFiltersList">
+              <div class="map-filter-group">Игроки</div>
+              <label><input type="checkbox" data-map-filter="alive" checked><span class="map-key" style="background:#3fb950"></span>Живые</label>
+              <label><input type="checkbox" data-map-filter="dead"><span class="map-key" style="background:#e5534b"></span>Мёртвые</label>
+
+              <div class="map-filter-group">Объекты</div>
+              <label><input type="checkbox" data-map-filter="vehicle" checked><span class="map-key" style="background:#d9a94a"></span>Транспорт</label>
+              <label><input type="checkbox" data-map-filter="barrel" checked><span class="map-key" style="background:#8b949e"></span>Бочки</label>
+              <label><input type="checkbox" data-map-filter="tent" checked><span class="map-key" style="background:#a371f7"></span>Палатки</label>
+              <label><input type="checkbox" data-map-filter="crate" checked><span class="map-key" style="background:#35b8c4"></span>Ящики</label>
+              <label><input type="checkbox" data-map-filter="stash" checked><span class="map-key" style="background:#db61a2"></span>Схроны</label>
+              <label><input type="checkbox" data-map-filter="flag" checked><span class="map-key" style="background:#e3b341"></span>Флаги</label>
+              <label><input type="checkbox" data-map-filter="watchtower" checked><span class="map-key" style="background:#c98b39"></span>Башни</label>
+              <label><input type="checkbox" data-map-filter="fence" checked><span class="map-key" style="background:#6e7681"></span>Заборы</label>
+            </div>
+          </div>
+
+          <div class="map-note hidden" id="mapNote"></div>
+        </div>
+
+        <div class="row" style="margin-top:12px;gap:18px">
+          <span class="muted" style="font-size:12px"><span class="map-key" style="background:#3fb950"></span> игрок жив</span>
+          <span class="muted" style="font-size:12px"><span class="map-key" style="background:#e5534b"></span> игрок мёртв</span>
+          <span class="muted" style="font-size:12px"><span class="map-key" style="background:#d9a94a"></span> транспорт</span>
+          <span class="muted" style="font-size:12px" id="mapCounts"></span>
+          <span class="muted" style="font-size:12px;margin-left:auto" id="mapAttribution">Карта: XAM · dayz.xam.nu</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== ЧАТ ==================== -->
+    <section class="view" id="view-chat">
+      <div class="card">
+        <h2><span class="ic">✉</span>Внутриигровой чат</h2>
+        <div class="row between" style="margin-bottom:10px">
+          <span class="muted" style="font-size:12.5px">Чтение — из админ-лога сервера (файлы .ADM), отправка — через RCON (say -1).</span>
+          <span class="muted mono" id="chatState">—</span>
+        </div>
+        <pre class="console chat-log" id="chatLog" aria-live="polite"></pre>
+        <div class="row" style="margin-top:12px">
+          <input type="text" id="chatInput" class="grow" placeholder="Сообщение всем игрокам" maxlength="500"
+                 autocomplete="off">
+          <button class="btn primary" id="chatSend" type="button">Отправить всем</button>
+        </div>
+        <div class="help">Отправка идёт через RCON (say -1) и требует работающего RCON-подключения.</div>
+      </div>
+    </section>
+
+    <!-- ==================== АНТИЧИТ ==================== -->
+    <section class="view" id="view-anticheat">
+      <div class="grid-3" style="margin-bottom:16px">
+        <div class="card stat" style="--nh:rgba(63,185,80,.24);--nh2:#3fb950">
+          <span class="k">Игроков в базе</span><span class="v" id="acPlayers">0</span>
+        </div>
+        <div class="card stat" style="--nh:rgba(217,169,74,.24);--nh2:#d9a94a">
+          <span class="k">В списке наблюдения</span><span class="v" id="dbWatch">0</span>
+        </div>
+        <div class="card stat" style="--nh:rgba(229,83,75,.24);--nh2:#e5534b">
+          <span class="k">Игроков онлайн</span><span class="v" id="dbOnline">0</span>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:16px">
+        <h2><span class="ic">⛨</span>Нарушения</h2>
+        <div class="row between" style="margin-bottom:12px">
+          <div class="row">
+            <label for="violationFilter" style="margin:0">Тип:</label>
+            <select id="violationFilter" style="width:auto">
+              <option value="">все нарушения</option>
+              <option value="teleport">телепорт</option>
+              <option value="speed">ускорение</option>
+              <option value="fly">полёт</option>
+              <option value="underground">под землёй</option>
+              <option value="distance">невозможная дистанция</option>
+              <option value="damage">урон без оружия</option>
+            </select>
+          </div>
+          <button class="btn ghost sm" id="violationsRefresh" type="button">Обновить</button>
+        </div>
+        <table class="table">
+          <thead>
+          <tr><th>Время</th><th>Игрок</th><th>Тип</th><th>Позиция</th><th>Очки</th><th>Всего</th><th>Действие</th><th>Подробности</th></tr>
+          </thead>
+          <tbody id="violationRows"></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h2><span class="ic">⚔</span>Килфид</h2>
+        <table class="table">
+          <thead><tr><th>Время</th><th>Убийца</th><th>Жертва</th><th>Оружие</th><th>Дистанция</th></tr></thead>
+          <tbody id="killRows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ==================== РЕЗЕРВНЫЕ КОПИИ ==================== -->
+    <section class="view" id="view-backups">
+      <div class="card">
+        <h2><span class="ic">⛁</span>Резервные копии</h2>
+        <div class="row between" style="margin-bottom:14px">
+          <span class="muted mono" id="backupDirectory">—</span>
+          <div class="row">
+            <button class="btn primary sm" id="btnCreateBackup" type="button">Создать копию</button>
+            <button class="btn ghost sm" id="btnReloadBackups" type="button">Обновить</button>
+          </div>
+        </div>
+        <table class="table">
+          <thead><tr><th>Файл</th><th>Тип</th><th>Размер</th><th>Создана</th><th></th></tr></thead>
+          <tbody id="backupRows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ==================== РАСПИСАНИЕ ==================== -->
+    <section class="view" id="view-schedule">
+      <div class="card" style="margin-bottom:16px">
+        <h2><span class="ic">⏱</span>Задачи по расписанию</h2>
+        <div class="row between" style="margin-bottom:14px">
+          <span class="muted" style="font-size:12.5px">Автоматические действия по времени или интервалу.</span>
+          <button class="btn primary sm" id="btnNewJob" type="button">Добавить задачу</button>
+        </div>
+        <table class="table">
+          <thead><tr><th>Название</th><th>Действие</th><th>Расписание</th><th>Вкл.</th><th>Последний запуск</th><th></th></tr></thead>
+          <tbody id="jobRows"></tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h2><span class="ic">≡</span>История выполнения</h2>
+        <table class="table">
+          <thead><tr><th>Время</th><th>Задача</th><th>Тип</th><th>Результат</th><th>Сообщение</th></tr></thead>
+          <tbody id="jobHistory"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ==================== СЛУЖБА ==================== -->
+    <section class="view" id="view-service">
+      <div class="card">
+        <h2><span class="ic">⚑</span>Служба Windows</h2>
+        <div class="row between" style="margin-bottom:14px">
+          <span class="muted" style="font-size:12.5px">Автозапуск панели при загрузке Windows, без входа в систему.</span>
+          <button class="btn ghost sm" id="btnReloadService" type="button">Обновить</button>
+        </div>
+        <dl class="kv" id="serviceInfo"></dl>
+        <div class="row" style="margin-top:18px">
+          <button class="btn primary" id="btnInstallService" type="button">Установить службу</button>
+          <button class="btn" id="btnStartService" type="button">Запустить</button>
+          <button class="btn" id="btnStopService" type="button">Остановить</button>
+          <button class="btn danger" id="btnUninstallService" type="button">Удалить службу</button>
+        </div>
+        <div class="help" id="serviceHelp">
+          Установка и удаление службы требуют запуска приложения от имени администратора.
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h2><span class="ic">⏻</span>Приложение</h2>
+        <div class="row">
+          <button class="btn" id="btnRestartApp" type="button">Перезапустить приложение</button>
+          <button class="btn ghost" id="btnExportSettings" type="button">Экспорт настроек</button>
+          <button class="btn ghost" id="btnImportSettings" type="button">Импорт настроек</button>
+          <input type="file" id="importFile" accept="application/json" class="hidden">
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== НАСТРОЙКИ ==================== -->
+    <section class="view" id="view-settings">
+      <div class="card">
+        <h2><span class="ic">☰</span>Настройки</h2>
+
+        <div class="subnav" id="settingsSubnav">
+          <button class="subtab active" data-panel="server" type="button">Сервер</button>
+          <button class="subtab" data-panel="web" type="button">Веб-интерфейс</button>
+          <button class="subtab" data-panel="backups" type="button">Резервные копии</button>
+          <button class="subtab" data-panel="files" type="button">Файлы и пути</button>
+          <button class="subtab" data-panel="advanced" type="button">Дополнительно</button>
+        </div>
+
+        <!-- сервер -->
+        <div class="panel" id="panel-server">
+          <div class="form-grid">
+            <div class="field">
+              <label for="setServerName">Название сервера</label>
+              <input type="text" id="setServerName" maxlength="64" spellcheck="false" placeholder="Chernarus PvP">
+            </div>
+            <div class="field">
+              <label for="setServerColor">Цвет метки</label>
+              <input type="color" id="setServerColor" value="#3fb950" style="height:40px;padding:4px">
+            </div>
+            <div class="field wide">
+              <label for="setBaseDir">Папка сервера DayZ (базовая)</label>
+              <div class="row" style="gap:10px;align-items:stretch">
+                <input type="text" id="setBaseDir" placeholder="C:\DayZServer" spellcheck="false" style="flex:1">
+                <button class="btn" id="btnBrowseBaseDir" type="button" style="white-space:nowrap">Обзор…</button>
+              </div>
+              <div class="help">
+                Здесь лежит сервер. По умолчанию <b>C:\DayZServer</b>. Рабочий каталог и конфиги берутся отсюда.
+              </div>
+            </div>
+            <div class="field wide" style="border-top:1px solid var(--line);padding-top:16px">
+              <div class="row end">
+                <button class="btn danger" id="btnDeleteServer" type="button">Удалить сервер из панели</button>
+              </div>
+              <div class="help">
+                Удаляется только запись в панели. Файлы сервера на диске остаются на месте.
+                Перед удалением сервер должен быть остановлен.
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="setWorkDir">Рабочий каталог (пусто = базовая папка)</label>
+              <div class="row" style="gap:10px;align-items:stretch">
+                <input type="text" id="setWorkDir" spellcheck="false" placeholder="оставьте пустым" style="flex:1">
+                <button class="btn" id="btnBrowseWorkDir" type="button" style="white-space:nowrap">Обзор…</button>
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="setExecutableName">Имя исполняемого файла</label>
+              <input type="text" id="setExecutableName" spellcheck="false" placeholder="DayZServer_x64.exe">
+            </div>
+
+            <div class="field">
+              <label for="setExe">Явный путь к exe (необязательно)</label>
+              <div class="row" style="gap:10px;align-items:stretch">
+                <input type="text" id="setExe" spellcheck="false" placeholder="оставьте пустым" style="flex:1">
+                <button class="btn" id="btnBrowseExe" type="button" style="white-space:nowrap">Обзор…</button>
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="setPort">Игровой порт</label>
+              <input type="number" id="setPort" min="1" max="65535">
+            </div>
+
+            <div class="field">
+              <label for="setConfig">Файл конфигурации</label>
+              <input type="text" id="setConfig" spellcheck="false" placeholder="serverDZ.cfg">
+            </div>
+
+            <div class="field">
+              <label for="setProfiles">Каталог profiles</label>
+              <input type="text" id="setProfiles" spellcheck="false" placeholder="profiles">
+            </div>
+
+            <div class="field">
+              <label for="setMods">Моды (через «;»)</label>
+              <input type="text" id="setMods" spellcheck="false" placeholder="@CF;@VPP">
+            </div>
+
+            <div class="field" style="border-top:1px solid var(--line);padding-top:16px">
+              <label class="check" style="margin-bottom:10px">
+                <input type="checkbox" id="setRconEnabled"> Включить RCON (живая консоль и команды)
+              </label>
+              <div class="row" style="gap:10px;align-items:stretch">
+                <label style="width:120px">
+                  <span class="help" style="display:block;margin-bottom:4px">Порт RCON</span>
+                  <input type="number" id="setRconPort" min="1" max="65535" placeholder="2306">
+                </label>
+                <label style="flex:1">
+                  <span class="help" style="display:block;margin-bottom:4px">Пароль RCON</span>
+                  <input type="text" id="setRconPassword" spellcheck="false" readonly>
+                </label>
+              </div>
+              <div class="help">
+                Порт и пароль записываются в <span class="mono">battleye\beserver_x64.cfg</span>
+                при запуске сервера. Пустой порт = порт игры + 4. Пароль генерируется автоматически.
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="setEncoding">Кодировка вывода</label>
+              <select id="setEncoding"></select>
+            </div>
+
+            <div class="field">
+              <label for="setPriority">Приоритет процесса</label>
+              <select id="setPriority">
+                <option value="Normal">Normal</option>
+                <option value="AboveNormal">AboveNormal</option>
+                <option value="High">High</option>
+                <option value="BelowNormal">BelowNormal</option>
+                <option value="Idle">Idle</option>
+              </select>
+            </div>
+
+            <div class="field wide">
+              <label for="setArgs">Аргументы запуска</label>
+              <input type="text" id="setArgs" spellcheck="false" placeholder="-config={config} -port={port}">
+              <div class="help">
+                Токены: <span class="mono">{exe}</span> <span class="mono">{workingDir}</span>
+                <span class="mono">{port}</span> <span class="mono">{config}</span>
+                <span class="mono">{profiles}</span> <span class="mono">{mods}</span>
+              </div>
+            </div>
+
+            <div class="field wide">
+              <label for="setExtra">Дополнительные аргументы</label>
+              <input type="text" id="setExtra" spellcheck="false">
+            </div>
+          </div>
+
+          <div class="toggles" style="display:flex;flex-direction:column;gap:10px;margin:16px 0">
+            <label class="check"><input type="checkbox" id="setStartOnLaunch"> Запускать сервер при старте панели</label>
+            <label class="check"><input type="checkbox" id="setAutoRestart"> Перезапускать после сбоя</label>
+            <label class="check"><input type="checkbox" id="setStdIn"> Перенаправлять ввод (нужно для команд)</label>
+            <label class="check"><input type="checkbox" id="setUseStopCommand"> Отправлять команду остановки в stdin</label>
+            <label class="check"><input type="checkbox" id="setClearConsole"> Очищать консоль при запуске</label>
+            <label class="check"><input type="checkbox" id="setAllowOutside"> Разрешить пути вне базовой папки</label>
+          </div>
+
+          <div class="form-grid">
+            <div class="field">
+              <label for="setStopCommand">Команда остановки</label>
+              <input type="text" id="setStopCommand" spellcheck="false">
+            </div>
+            <div class="field">
+              <label for="setGraceful">Таймаут остановки, с</label>
+              <input type="number" id="setGraceful" min="0" max="600">
+            </div>
+            <div class="field">
+              <label for="setRestartDelay">Задержка автоперезапуска, с</label>
+              <input type="number" id="setRestartDelay" min="1">
+            </div>
+            <div class="field">
+              <label for="setMaxRestarts">Лимит автоперезапусков</label>
+              <input type="number" id="setMaxRestarts" min="1">
+            </div>
+            <div class="field">
+              <label for="setRestartWindow">Окно лимита, мин</label>
+              <input type="number" id="setRestartWindow" min="1">
+            </div>
+          </div>
+        </div>
+
+        <!-- веб -->
+        <div class="panel hidden" id="panel-web">
+          <div class="form-grid">
+            <div class="field">
+              <label for="setWebPort">Порт веб-интерфейса</label>
+              <input type="number" id="setWebPort" min="1" max="65535">
+            </div>
+            <div class="field">
+              <label for="setBind">Адрес прослушивания</label>
+              <input type="text" id="setBind" spellcheck="false" placeholder="127.0.0.1">
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px;margin:16px 0">
+            <label class="check"><input type="checkbox" id="setAllowRemote"> Разрешить доступ из локальной сети</label>
+            <label class="check"><input type="checkbox" id="setOpenBrowser"> Открывать браузер при старте панели</label>
+          </div>
+          <div class="help" style="margin-bottom:12px">
+            Доступ из локальной сети открывает панель на этом компьютере по адресу в сети.
+            Панель передаёт данные без шифрования, поэтому для доступа извне
+            сети используйте защищённый туннель (HTTPS) или VPN.
+          </div>
+          <div class="auth-alert" id="remoteAccessWarning" style="background:#2c2410;border-color:#4a3c1a;color:#e9c46a">
+            Смена порта или адреса применится только после перезапуска приложения.
+          </div>
+          <div class="row" style="margin-top:14px">
+            <button class="btn" id="btnRestartApp2" type="button">Перезапустить приложение</button>
+          </div>
+        </div>
+
+        <!-- копии -->
+        <div class="panel hidden" id="panel-backups">
+          <div class="form-grid">
+            <div class="field">
+              <label for="setRetention">Хранить копий</label>
+              <input type="number" id="setRetention" min="1" max="500">
+            </div>
+            <div class="field">
+              <label for="setCompression">Уровень сжатия</label>
+              <select id="setCompression">
+                <option value="Fastest">Fastest</option>
+                <option value="Optimal">Optimal</option>
+                <option value="SmallestSize">SmallestSize</option>
+                <option value="NoCompression">Без сжатия</option>
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label for="setIncludes">Что включать (по одному пути на строку)</label>
+            <textarea id="setIncludes" class="small-area" spellcheck="false"></textarea>
+          </div>
+          <div class="field">
+            <label for="setExcludes">Исключения (маски, по одной на строку)</label>
+            <textarea id="setExcludes" class="small-area" spellcheck="false"></textarea>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px;margin:16px 0">
+            <label class="check"><input type="checkbox" id="setBackupEnabled"> Включить резервное копирование</label>
+            <label class="check"><input type="checkbox" id="setStopForBackup"> Останавливать сервер на время копии</label>
+          </div>
+        </div>
+
+        <!-- файлы и пути -->
+        <div class="panel hidden" id="panel-files">
+          <div class="field">
+            <label for="setConfigFiles">Файлы конфигурации (имя|путь|описание, по одному на строку)</label>
+            <textarea id="setConfigFiles" class="small-area" spellcheck="false" style="min-height:110px"></textarea>
+          </div>
+          <dl class="kv" id="pathsInfo"></dl>
+        </div>
+
+        <!-- дополнительно -->
+        <div class="panel hidden" id="panel-advanced">
+          <div class="form-grid">
+            <div class="field">
+              <label for="setConsoleLines">Строк в буфере консоли</label>
+              <input type="number" id="setConsoleLines" min="100" max="200000">
+            </div>
+            <div class="field">
+              <label for="setLogLevel">Уровень журнала</label>
+              <select id="setLogLevel">
+                <option value="Debug">Debug</option>
+                <option value="Information">Information</option>
+                <option value="Warning">Warning</option>
+                <option value="Error">Error</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="setLogRetention">Хранить журналы, дней</label>
+              <input type="number" id="setLogRetention" min="1" max="365">
+            </div>
+            <div class="field">
+              <label for="setSessionHours">Время жизни сессии, ч</label>
+              <input type="number" id="setSessionHours" min="1" max="720">
+            </div>
+          </div>
+
+          <div class="field" style="border-top:1px solid var(--line);padding-top:16px">
+            <div class="row between">
+              <div>
+                <b style="font-size:13.5px">Steam</b>
+                <div class="help" id="steamSettingsHint">проверка…</div>
+              </div>
+              <span class="row" style="gap:8px">
+                <button class="btn" id="btnSteamLogin" type="button">Войти в Steam</button>
+                <button class="btn" id="btnSteamLogout" type="button">Выйти из Steam</button>
+              </span>
+            </div>
+
+            <div class="row" style="gap:10px;align-items:stretch;margin-top:12px">
+              <label style="flex:1">
+                <span class="help" style="display:block;margin-bottom:4px">Каталог SteamCMD (рядом с панелью)</span>
+                <input type="text" id="setSteamDir" spellcheck="false" readonly>
+              </label>
+              <button class="btn" id="btnSteamInstall" type="button" style="white-space:nowrap;align-self:flex-end">Установить SteamCMD</button>
+            </div>
+
+            <div class="help">
+              SteamCMD хранится рядом с панелью и общий для всех серверов.
+              Выход сбрасывает сессию: при следующем входе потребуется код Steam Guard.
+            </div>
+
+            <!-- Загрузка сервера DayZ: нужен вход в Steam и папка сервера. -->
+            <div class="row between" style="margin-top:14px;border-top:1px solid var(--line);padding-top:14px">
+              <div>
+                <b style="font-size:13.5px">Сервер DayZ</b>
+                <div class="help" id="steamServerHint">проверка…</div>
+              </div>
+              <button class="btn primary" id="btnSteamServerInstall" type="button">Скачать сервер</button>
+            </div>
+            <div class="node-progress hidden" id="steamServerBar" style="margin-top:10px">
+              <div class="node-progress-head">
+                <span class="node-progress-phase" id="steamServerBarLabel">подготовка</span>
+                <span class="node-progress-value" id="steamServerBarValue">0%</span>
+              </div>
+              <div class="node-progress-rail"><i id="steamServerBarFill" style="width:0%"></i></div>
+            </div>
+            <div class="help">
+              Сервер DayZ доступен только аккаунту, владеющему игрой. Он скачается
+              в папку выбранного сервера.
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px;margin:16px 0">
+            <label class="check"><input type="checkbox" id="setWriteServerLog"> Писать лог сервера в файл</label>
+            <label class="check"><input type="checkbox" id="setAutostart"> Автозапуск панели при входе в Windows</label>
+          </div>
+          <div class="field">
+            <label for="setEnvVars">Переменные окружения сервера (ИМЯ=значение, по одной на строку)</label>
+            <textarea id="setEnvVars" class="small-area" spellcheck="false"></textarea>
+          </div>
+          <div class="row end">
+            <button class="btn ghost" id="btnReloadSettings" type="button">Отменить изменения</button>
+            <button class="btn primary" id="btnSaveSettings" type="button">Сохранить настройки</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== БЕЗОПАСНОСТЬ ==================== -->
+    <section class="view" id="view-security">
+      <div class="grid-2">
+        <div class="card">
+          <h2><span class="ic">⛨</span>Учётная запись владельца</h2>
+          <dl class="kv" style="margin-bottom:18px">
+            <dt>Владелец</dt><dd id="secOwner">—</dd>
+            <dt>Создан</dt><dd id="secCreated">—</dd>
+            <dt>Хеш пароля</dt><dd>PBKDF2 · SHA-256 · 600 000 итераций</dd>
+            <dt>Сессия</dt><dd>HttpOnly + SameSite=Strict cookie</dd>
+          </dl>
+
+          <div class="field">
+            <label for="curPassword">Текущий пароль</label>
+            <input type="password" id="curPassword" autocomplete="current-password" maxlength="200">
+          </div>
+          <div class="field">
+            <label for="newPassword">Новый пароль</label>
+            <input type="password" id="newPassword" autocomplete="new-password" maxlength="200">
+          </div>
+          <div class="field">
+            <label for="newPassword2">Повторите новый пароль</label>
+            <input type="password" id="newPassword2" autocomplete="new-password" maxlength="200">
+          </div>
+          <button class="btn primary" id="btnChangePassword" type="button">Сменить пароль</button>
+        </div>
+
+        <div class="card">
+          <h2><span class="ic">▤</span>Журнал аудита</h2>
+          <div class="row between" style="margin-bottom:10px">
+            <span class="muted" style="font-size:12.5px">Последние действия в панели</span>
+            <button class="btn ghost sm" id="btnReloadAudit" type="button">Обновить</button>
+          </div>
+          <pre class="console" id="auditLog" style="height:340px"></pre>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h2><span class="ic">🛡</span>Защита панели</h2>
+        <table class="table">
+          <tbody>
+          <tr><td>Авторизация</td><td><span class="tag on" id="secAuthTag">включена</span></td>
+              <td class="muted">Обязательный вход по логину и паролю владельца</td></tr>
+          <tr><td>CSRF-защита</td><td><span class="tag on">активна</span></td>
+              <td class="muted">Двойная отправка токена + проверка Origin для всех изменяющих запросов</td></tr>
+          <tr><td>Content-Security-Policy</td><td><span class="tag on">строгая</span></td>
+              <td class="muted">Только собственные скрипты и стили, без inline и внешних источников</td></tr>
+          <tr><td>Защита от фреймов</td><td><span class="tag on">DENY</span></td>
+              <td class="muted">X-Frame-Options и frame-ancestors запрещают встраивание</td></tr>
+          <tr><td>Ограничение запросов</td><td><span class="tag on">включено</span></td>
+              <td class="muted">Отдельный лимит на попытки входа и на API</td></tr>
+          <tr><td>Слушание</td><td><span class="tag info" id="secBind">127.0.0.1</span></td>
+              <td class="muted">По умолчанию панель доступна только с этого компьютера</td></tr>
+          <tr><td>Права на файлы</td><td><span class="tag" id="secPaths">внутри базовой папки</span></td>
+              <td class="muted">Доступ к файлам ограничен базовой папкой сервера</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<div id="sideTip" role="tooltip"></div>
+
+<!-- ==================== МОДАЛКА ЗАДАЧИ ==================== -->
+<div class="overlay" id="jobModal">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="jobModalTitle">
+    <div class="mhead"><b id="jobModalTitle">Задача расписания</b>
+      <button class="x" id="jobCancelX" type="button" aria-label="Закрыть">×</button></div>
+    <div class="mbody">
+      <div class="form-grid">
+        <div class="field wide">
+          <label for="jobName">Название</label>
+          <input type="text" id="jobName" maxlength="80" placeholder="Ночная резервная копия">
+        </div>
+        <div class="field">
+          <label for="jobType">Действие</label>
+          <select id="jobType">
+            <option value="backup">Резервное копирование</option>
+            <option value="restart">Перезапуск сервера</option>
+            <option value="stop">Остановка сервера</option>
+            <option value="start">Запуск сервера</option>
+            <option value="command">Команда серверу</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="jobMode">Режим</label>
+          <select id="jobMode">
+            <option value="daily">Ежедневно в указанное время</option>
+            <option value="interval">Каждые N минут</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="jobTime">Время (ЧЧ:ММ)</label>
+          <input type="text" id="jobTime" placeholder="04:00" maxlength="5">
+        </div>
+        <div class="field">
+          <label for="jobInterval">Интервал, мин</label>
+          <input type="number" id="jobInterval" min="1" value="360">
+        </div>
+        <div class="field wide hidden" id="jobPayloadRow">
+          <label for="jobPayload">Команда</label>
+          <input type="text" id="jobPayload" maxlength="500" placeholder="#shutdown">
+        </div>
+      </div>
+      <label class="check" style="margin-top:6px"><input type="checkbox" id="jobEnabled"> Включена</label>
+    </div>
+    <div class="mfoot">
+      <button class="btn ghost" id="jobCancel" type="button">Отмена</button>
+      <button class="btn primary" id="jobSave" type="button">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== МОДАЛКА ПОДТВЕРЖДЕНИЯ ==================== -->
+<div class="overlay" id="confirmModal">
+  <div class="modal confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+    <div class="confirm-head">
+      <span class="confirm-icon" id="confirmIcon">⚠</span>
+      <div class="confirm-head-text">
+        <b id="confirmTitle">Подтверждение</b>
+        <small id="confirmSub">Проверьте действие перед продолжением</small>
+      </div>
+      <button class="x" id="confirmX" type="button" aria-label="Закрыть">×</button>
+    </div>
+    <div class="mbody">
+      <p class="confirm-text" id="confirmText"></p>
+      <ul class="confirm-list hidden" id="confirmList"></ul>
+    </div>
+    <div class="mfoot">
+      <button class="btn ghost" id="confirmCancel" type="button">Отмена</button>
+      <button class="btn" id="confirmAlt" type="button" style="display:none">Второй вариант</button>
+      <button class="btn danger" id="confirmOk" type="button">Подтвердить</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== МОДАЛКА СЕРВЕРА ==================== -->
+<div class="overlay" id="serverModal">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="serverModalTitle">
+    <div class="mhead">
+      <b id="serverModalTitle">Новый сервер DayZ</b>
+      <button class="x" id="serverModalX" type="button" aria-label="Закрыть">×</button>
+    </div>
+    <div class="mbody">
+      <div class="field">
+        <label for="fName">Название сервера *</label>
+        <input type="text" id="fName" maxlength="64" placeholder="Chernarus PvP">
+      </div>
+
+      <div class="field">
+        <label for="fDir">Папка сервера *</label>
+        <div class="row" style="gap:10px;align-items:stretch">
+          <input type="text" id="fDir" spellcheck="false" style="flex:1">
+          <button class="btn" type="button" id="fDirBrowse" style="white-space:nowrap">Обзор…</button>
+        </div>
+        <div class="help" id="fDirHelp">Где лежит сервер DayZ:
+          <span class="mono">DayZServer_x64.exe</span>,
+          <span class="mono">serverDZ.cfg</span> и <span class="mono">profiles</span>.</div>
+      </div>
+
+      <div class="grid2">
+        <div class="field">
+          <label for="fPort">Игровой порт</label>
+          <input type="number" id="fPort" min="1" max="65535" value="2302">
+          <div class="help">Сервер занимает блок из пяти портов.</div>
+        </div>
+        <div class="field">
+          <label for="fMap">Карта</label>
+          <select id="fMap">
+            <option value="chernarusplus">Chernarus+</option>
+            <option value="enoch">Livonia</option>
+            <option value="sakhal">Sakhal</option>
+            <option value="namalsk">Namalsk</option>
+            <option value="takistan">Takistan</option>
+            <option value="custom">Другая</option>
+          </select>
+          <div class="help">Подставляется в миссию сервера.</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="fColor">Цвет метки</label>
+        <select id="fColor">
+          <option value="#3fb950">Зелёный</option>
+          <option value="#4a90d9">Синий</option>
+          <option value="#a371f7">Фиолетовый</option>
+          <option value="#d9a94a">Янтарный</option>
+          <option value="#e5534b">Красный</option>
+          <option value="#35b8c4">Бирюзовый</option>
+          <option value="#e06c9f">Розовый</option>
+        </select>
+      </div>
+
+      <div class="auth-alert hidden" id="serverModalError" role="alert"></div>
+    </div>
+    <div class="mfoot">
+      <button class="btn ghost" id="serverModalCancel" type="button">Отмена</button>
+      <button class="btn primary" id="serverModalSave" type="button">Создать</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== МОДАЛКА ВХОДА В STEAM ==================== -->
+<div class="overlay" id="steamModal">
+  <div class="modal steam-modal-card" style="max-width:520px" role="dialog" aria-modal="true"
+       aria-labelledby="steamModalTitle">
+    <div class="mhead">
+      <b id="steamModalTitle">Вход в Steam</b>
+      <span class="steam-badge">SteamCMD</span>
+    </div>
+    <div class="mbody">
+      <p class="muted" style="font-size:13px;line-height:1.6;margin-bottom:16px">
+        Логин нужен, чтобы панель могла скачивать и обновлять сервер DayZ из Steam.
+        Сессия сохраняется на этом компьютере — код Steam Guard потребуется только один раз.
+      </p>
+
+      <div class="field">
+        <label for="steamUser">Логин Steam</label>
+        <input type="text" id="steamUser" maxlength="64" spellcheck="false" autocapitalize="none"
+               autocomplete="username" placeholder="steam_login">
+      </div>
+
+      <div class="field">
+        <label for="steamPass">Пароль Steam</label>
+        <input type="password" id="steamPass" maxlength="128" autocomplete="current-password">
+        <div class="help" id="steamLoginHint">Пароль передаётся только в SteamCMD и не сохраняется.</div>
+      </div>
+
+      <!-- Наличие Steam Guard: без него вход по логину и паролю, с ним — ждём код. -->
+      <div class="field">
+        <label class="check" style="font-size:13px">
+          <input type="checkbox" id="steamUseGuard">
+          У аккаунта включён Steam Guard
+        </label>
+        <div class="help" id="steamGuardHint">
+          Если Steam Guard выключен, вход выполнится сразу по логину и паролю.
+          Если включён — панель дождётся запроса кода и покажет поле для ввода.
+        </div>
+      </div>
+
+      <div class="field hidden" id="steamConfirmRow">
+        <label>Подтверждение входа</label>
+        <div class="help" id="steamConfirmText">
+          Откройте мобильное приложение Steam и нажмите «Одобрить» во всплывающем запросе.
+          Панель продолжит вход автоматически.
+        </div>
+        <div class="row" style="gap:8px;margin-top:8px">
+          <button class="btn sm" id="steamConfirmRetry" type="button">Отправить запрос ещё раз</button>
+          <button class="btn ghost sm" id="steamConfirmUseCode" type="button">Ввести код вместо подтверждения</button>
+        </div>
+      </div>
+
+      <div class="field hidden" id="steamGuardRow">
+        <label for="steamGuard">Код Steam Guard</label>
+        <input type="text" id="steamGuard" maxlength="16" inputmode="numeric" spellcheck="false"
+               autocapitalize="off" autocomplete="one-time-code" placeholder="XXXXX">
+        <div class="help">Код из мобильного приложения Steam или из письма. После входа он больше не потребуется.</div>
+      </div>
+
+      <div class="steam-row hidden" id="steamProgress">
+        <span class="steam-spinner"></span>
+        <span id="steamProgressText">Обращение к Steam…</span>
+      </div>
+
+      <div class="auth-alert hidden" id="steamModalError" role="alert" aria-live="polite"></div>
+    </div>
+    <div class="mfoot">
+      <button class="btn primary" id="steamGuardSubmit" type="button" style="display:none">Отправить код</button>
+      <button class="btn primary" id="steamModalSubmit" type="button">Войти</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== МОДАЛКА ВВОДА ==================== -->
+<div class="overlay" id="promptModal">
+  <div class="modal" style="max-width:520px" role="dialog" aria-modal="true" aria-labelledby="promptTitle">
+    <div class="mhead"><b id="promptTitle">Ввод</b>
+      <button class="x" id="promptX" type="button" aria-label="Закрыть">×</button></div>
+    <div class="mbody">
+      <div class="field">
+        <label for="promptInput" id="promptLabel"></label>
+        <input type="text" id="promptInput" maxlength="500" autocomplete="off">
+        <textarea id="promptArea" class="small-area hidden" maxlength="2000"></textarea>
+      </div>
+    </div>
+    <div class="mfoot">
+      <button class="btn ghost" id="promptCancel" type="button">Отмена</button>
+      <button class="btn primary" id="promptOk" type="button">Отправить</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== КАРТОЧКА ИГРОКА ==================== -->
+<div class="overlay" id="playerModal">
+  <div class="modal pm-modal" role="dialog" aria-modal="true">
+    <div class="mhead">
+      <span class="pm-avatar" id="playerModalAvatar">☺</span>
+      <b id="playerModalName">Игрок</b>
+      <span class="mono muted" id="playerModalId" style="font-size:12px"></span>
+      <span class="tag" id="playerModalStateTag" style="display:none"></span>
+      <button class="x" id="playerModalClose" type="button" aria-label="Закрыть">×</button>
+    </div>
+
+    <div class="pm-actions" id="playerModalQuick"></div>
+
+    <div class="mbody pm-body">
+      <div class="pm-col">
+        <dl class="kv" id="playerModalStats"></dl>
+
+        <h3 class="pm-h">Состояние выживания</h3>
+        <div id="playerModalSurvival"></div>
+
+        <h3 class="pm-h">Модификаторы</h3>
+        <div id="playerModalMods" class="row"></div>
+
+        <h3 class="pm-h">Последние события</h3>
+        <div id="playerModalEvents" class="pm-events"></div>
+
+        <h3 class="pm-h">
+          Трек перемещений <span class="muted" id="playerModalTrackCount" style="text-transform:none;letter-spacing:0"></span>
+        </h3>
+        <div id="playerModalTrack" class="track-box"></div>
+
+        <h3 class="pm-h">Заметка администратора</h3>
+        <textarea id="playerModalNote" class="small-area" maxlength="500" placeholder="Например: подозреваю в дюпе"></textarea>
+        <div class="row between" style="margin-top:10px">
+          <label class="check"><input type="checkbox" id="playerModalWatch"> В списке наблюдения</label>
+          <button class="btn primary sm" id="playerModalSaveNote" type="button">Сохранить заметку</button>
+        </div>
+      </div>
+
+      <!-- Визуальный инвентарь: фигурка выжившего + слоты + карго. -->
+      <div class="pm-col pm-inv-col">
+        <div class="pm-inv-head">
+          <h3 class="pm-h" style="margin:0">Инвентарь</h3>
+          <button class="btn ghost sm" id="playerModalInvRefresh" type="button">Обновить</button>
+        </div>
+
+        <div class="inv-stage" id="playerInvStage">
+          <!-- Слева — фигурка и слоты экипировки, справа — карго. -->
+          <div class="inv-figure">
+            <div class="inv-body" id="playerInvBody"></div>
+            <div class="inv-side inv-side-left" id="playerInvLeft"></div>
+            <div class="inv-side inv-side-right" id="playerInvRight"></div>
+          </div>
+
+          <div class="inv-cargo">
+            <div class="inv-cargo-title">Рюкзак и карманы</div>
+            <div class="inv-cargo-list" id="playerInvCargo"></div>
+          </div>
+        </div>
+
+        <div class="inv-hint hidden" id="playerInvHint"></div>
+
+        <div class="inv-palette" id="playerInvPalette">
+          <div class="row between" style="margin-bottom:8px">
+            <span class="muted" style="font-size:12px">Перетащите предмет на игрока, чтобы выдать</span>
+            <input type="text" id="invSearch" placeholder="Поиск класса" style="width:160px">
+          </div>
+          <div class="inv-filter-hint hidden" id="invFilterHint"></div>
+          <div class="inv-palette-list" id="playerInvPaletteList"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== СТАРТОВЫЙ НАБОР ==================== -->
+<div class="overlay" id="spawnKitModal">
+  <div class="modal loadout-modal" role="dialog" aria-modal="true" aria-labelledby="spawnKitTitle">
+    <div class="mhead">
+      <span class="ic">🎁</span>
+      <b id="spawnKitTitle">Стартовый набор</b>
+      <span class="muted" id="spawnKitSub" style="font-size:12px"></span>
+      <button class="x" id="spawnKitX" type="button" aria-label="Закрыть">×</button>
+    </div>
+    <div class="mbody">
+      <div class="help" style="margin-bottom:12px">
+        Этот набор получает каждый новый персонаж при входе. Набор для конкретного
+        пола переопределяет общий. Предметы можно перетаскивать из каталога на фигурку
+        или в рюкзак.
+      </div>
+      <div class="subnav" id="spawnKitTabs">
+        <button class="subtab active" data-kit="common" type="button">Для всех</button>
+        <button class="subtab" data-kit="male" type="button">Мужской</button>
+        <button class="subtab" data-kit="female" type="button">Женский</button>
+      </div>
+      <div id="spawnKitEditor"></div>
+    </div>
+    <div class="mfoot">
+      <button class="btn ghost" id="spawnKitClear" type="button">Очистить набор</button>
+      <span class="muted" id="spawnKitStatus" style="margin-right:auto;font-size:12px"></span>
+      <button class="btn" id="spawnKitCancel" type="button">Отмена</button>
+      <button class="btn primary" id="spawnKitSave" type="button">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== ПРЕСЕТЫ ==================== -->
+<div class="overlay" id="presetModal">
+  <div class="modal loadout-modal" role="dialog" aria-modal="true" aria-labelledby="presetTitle">
+    <div class="mhead">
+      <span class="ic">📦</span>
+      <b id="presetTitle">Пресеты</b>
+      <span class="muted" id="presetSub" style="font-size:12px"></span>
+      <button class="x" id="presetX" type="button" aria-label="Закрыть">×</button>
+    </div>
+    <div class="mbody">
+      <!-- Список пресетов -->
+      <div id="presetListView">
+        <div class="row between" style="margin-bottom:12px">
+          <span class="muted" style="font-size:12.5px">
+            Пресет можно выдать выбранным игрокам до определённого времени.
+          </span>
+          <button class="btn primary sm" id="presetNew" type="button">＋ Новый пресет</button>
+        </div>
+        <div id="presetList" class="preset-list"></div>
+      </div>
+
+      <!-- Редактор пресета -->
+      <div id="presetEditorView" class="hidden">
+        <div class="row between" style="margin-bottom:12px;gap:10px;flex-wrap:wrap">
+          <button class="btn ghost sm" id="presetBack" type="button">← К списку</button>
+          <input type="text" id="presetName" maxlength="48" placeholder="Название пресета"
+                 spellcheck="false" style="max-width:280px">
+          <label class="row" style="gap:6px;font-size:12px">
+            Действует до
+            <input type="datetime-local" id="presetExpires" style="width:200px">
+          </label>
+          <label class="check"><input type="checkbox" id="presetEnabled" checked> Активен</label>
+        </div>
+
+        <div class="field" style="margin-bottom:12px">
+          <label>Кому выдать <span class="muted">(пусто — не выдаётся никому)</span></label>
+          <div id="presetPlayers" class="preset-players"></div>
+        </div>
+
+        <div id="presetEditor"></div>
+      </div>
+    </div>
+    <div class="mfoot" id="presetFooterList">
+      <button class="btn" id="presetClose" type="button">Закрыть</button>
+    </div>
+    <div class="mfoot hidden" id="presetFooterEdit">
+      <button class="btn ghost danger-text" id="presetDelete" type="button">Удалить</button>
+      <span class="muted" id="presetStatus" style="margin-right:auto;font-size:12px"></span>
+      <button class="btn" id="presetCancel" type="button">Отмена</button>
+      <button class="btn primary" id="presetSave" type="button">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== ДОБАВИТЬ МОД ИЗ WORKSHOP ==================== -->
+<div class="overlay" id="modAddModal">
+  <div class="modal" style="max-width:640px" role="dialog" aria-modal="true" aria-labelledby="modAddTitle">
+    <div class="mhead">
+      <b id="modAddTitle">Добавить мод из Workshop</b>
+      <button class="x" id="modAddX" type="button" aria-label="Закрыть">×</button>
+    </div>
+    <div class="mbody">
+      <div class="field" style="margin-bottom:12px">
+        <label for="modAddSearch">Поиск по названию в Steam Workshop</label>
+        <div class="row" style="gap:8px">
+          <input type="text" id="modAddSearch" class="grow" spellcheck="false"
+                 placeholder="Community Framework">
+          <button class="btn" id="modAddSearchBtn" type="button">Найти</button>
+        </div>
+      </div>
+
+      <div id="modSearchResults" class="mod-search-results"></div>
+
+      <details style="margin-top:12px">
+        <summary class="muted" style="cursor:pointer;font-size:12.5px">Вставить ссылку или ID вручную</summary>
+        <div class="field" style="margin-top:10px">
+          <input type="text" id="modAddLink" spellcheck="false"
+                 placeholder="https://steamcommunity.com/sharedfiles/filedetails/?id=1559212036">
+        </div>
+      </details>
+    </div>
+    <div class="mfoot">
+      <button class="btn" id="modAddCancel" type="button">Закрыть</button>
+      <button class="btn primary" id="modAddSave" type="button">Добавить по ссылке</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== ДОБАВИТЬ ЛОКАЛЬНЫЙ МОД ==================== -->
+<div class="overlay" id="modLocalModal">
+  <div class="modal" style="max-width:560px" role="dialog" aria-modal="true" aria-labelledby="modLocalTitle">
+    <div class="mhead">
+      <b id="modLocalTitle">Добавить локальный мод</b>
+      <button class="x" id="modLocalX" type="button" aria-label="Закрыть">×</button>
+    </div>
+    <div class="mbody">
+      <div class="field" style="margin-bottom:12px">
+        <label for="modLocalPath">Папка мода на диске</label>
+        <div class="row" style="gap:8px">
+          <input type="text" id="modLocalPath" class="grow" spellcheck="false" placeholder="C:\Mods\@MyMod">
+          <button class="btn" id="modLocalBrowse" type="button">Обзор…</button>
+        </div>
+      </div>
+      <div class="field" style="margin-bottom:12px">
+        <label for="modLocalName">Название <span class="muted">(необязательно)</span></label>
+        <input type="text" id="modLocalName" maxlength="64" spellcheck="false">
+      </div>
+      <div class="help">
+        Папка скопируется в каталог сервера (если лежит вне него) и подключится к запуску.
+      </div>
+    </div>
+    <div class="mfoot">
+      <button class="btn" id="modLocalCancel" type="button">Отмена</button>
+      <button class="btn primary" id="modLocalSave" type="button">Добавить мод</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== НАСТРОЙКИ МОДОВ ==================== -->
+<div class="overlay" id="modSettingsModal">
+  <div class="modal" style="max-width:520px" role="dialog" aria-modal="true" aria-labelledby="modSettingsTitle">
+    <div class="mhead">
+      <b id="modSettingsTitle">Настройки модов</b>
+      <button class="x" id="modSettingsX" type="button" aria-label="Закрыть">×</button>
+    </div>
+    <div class="mbody">
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <label class="check"><input type="checkbox" id="modSetUpdateOnStart">
+          Обновлять моды из Workshop при запуске сервера</label>
+        <label class="check"><input type="checkbox" id="modSetAutoDaily">
+          Проверять обновления раз в сутки автоматически</label>
+        <label class="check"><input type="checkbox" id="modSetCleanup">
+          Удалять временные файлы Steam после загрузки</label>
+      </div>
+      <div class="help" style="margin-top:14px" id="modSetSteamHint">—</div>
+    </div>
+    <div class="mfoot">
+      <button class="btn primary" id="modSettingsSave" type="button">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== НАСТРОЙКИ ЛОГОВ ==================== -->
+<div class="overlay" id="logSettingsModal">
+  <div class="modal" style="max-width:520px" role="dialog" aria-modal="true" aria-labelledby="logSettingsTitle">
+    <div class="mhead">
+      <b id="logSettingsTitle">Настройки логов и хранения</b>
+      <button class="x" id="logSettingsX" type="button" aria-label="Закрыть">×</button>
+    </div>
+    <div class="mbody">
+      <label class="check" style="margin-bottom:12px"><input type="checkbox" id="logSetEnabled">
+        Включить резервное копирование логов</label>
+
+      <div class="form-grid" style="margin-bottom:12px">
+        <div class="field">
+          <label for="logSetInterval">Копировать каждые, часов</label>
+          <input type="number" id="logSetInterval" min="1" max="168">
+        </div>
+        <div class="field">
+          <label for="logSetRetention">Хранить копий</label>
+          <input type="number" id="logSetRetention" min="1" max="100">
+        </div>
+        <div class="field">
+          <label for="logSetDays">Хранить логи, дней (0 — не удалять)</label>
+          <input type="number" id="logSetDays" min="0" max="3650">
+        </div>
+      </div>
+
+      <label class="check" style="margin-bottom:8px"><input type="checkbox" id="logSetOnStart">
+        Архивировать логи при запуске сервера (каждый запуск — с чистых логов)</label>
+      <label class="check"><input type="checkbox" id="logSetCompress">
+        Сжимать копии логов в zip</label>
+
+      <div class="help" style="margin-top:14px">
+        При запуске сервера существующие логи упаковываются в zip, переносятся
+        в резервные копии и удаляются, чтобы новый запуск начался с нуля.
+      </div>
+      <div class="help" style="margin-top:10px" id="logBackupDir">—</div>
+    </div>
+    <div class="mfoot">
+      <button class="btn" id="logSettingsCancel" type="button">Отмена</button>
+      <button class="btn primary" id="logSettingsSave" type="button">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== АДМИНИСТРАТОРЫ ПАНЕЛИ ==================== -->
+<div class="overlay" id="adminsModal">
+  <div class="modal" style="max-width:880px" role="dialog" aria-modal="true" aria-labelledby="adminsTitle">
+    <div class="mhead">
+      <span class="pm-avatar">👤</span>
+      <b id="adminsTitle">Администраторы панели</b>
+      <button class="x" id="adminsX" type="button" aria-label="Закрыть">×</button>
+    </div>
+    <div class="mbody">
+      <div class="row between" style="margin-bottom:12px">
+        <span class="muted" style="font-size:12.5px">
+          Владелец видит всё. Администраторам выдайте нужные разделы и серверы.
+        </span>
+        <button class="btn primary sm" id="adminAddBtn" type="button">＋ Добавить администратора</button>
+      </div>
+
+      <table class="table">
+        <thead>
+        <tr><th>Имя</th><th>Разделы</th><th>Серверы</th><th>Последний вход</th><th></th></tr>
+        </thead>
+        <tbody id="adminRows"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== РЕДАКТОР АДМИНИСТРАТОРА ==================== -->
+<div class="overlay" id="adminEditModal">
+  <div class="modal" style="max-width:600px" role="dialog" aria-modal="true" aria-labelledby="adminEditTitle">
+    <div class="mhead">
+      <b id="adminEditTitle">Новый администратор</b>
+      <button class="x" id="adminEditX" type="button" aria-label="Закрыть">×</button>
+    </div>
+    <div class="mbody">
+      <div class="field" style="margin-bottom:12px">
+        <label for="adminUsername">Имя входа</label>
+        <input type="text" id="adminUsername" maxlength="32" spellcheck="false" autocomplete="off">
+      </div>
+      <div class="field" style="margin-bottom:14px">
+        <label for="adminPassword">Пароль <span class="muted" id="adminPassHint">(оставьте пустым, чтобы не менять)</span></label>
+        <input type="password" id="adminPassword" autocomplete="new-password">
+      </div>
+
+      <label class="check" style="margin-bottom:8px"><input type="checkbox" id="adminAllSections"> Доступ ко всем разделам</label>
+      <div class="subnav" id="adminSections" style="flex-wrap:wrap;margin-bottom:16px"></div>
+
+      <label class="check" style="margin-bottom:8px"><input type="checkbox" id="adminAllServers"> Доступ ко всем серверам</label>
+      <div id="adminServers" class="admin-servers"></div>
+    </div>
+    <div class="mfoot">
+      <span class="muted" id="adminEditNote" style="margin-right:auto;font-size:12px"></span>
+      <button class="btn" id="adminEditCancel" type="button">Отмена</button>
+      <button class="btn primary" id="adminEditSave" type="button">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== ВЫБОР ПАПКИ ==================== -->
+<div class="overlay" id="folderModal">
+  <div class="modal" style="max-width:560px" role="dialog" aria-modal="true" aria-labelledby="folderTitle">
+    <div class="mhead">
+      <b id="folderTitle">Выбор папки</b>
+      <button class="x" id="folderX" type="button" aria-label="Закрыть">×</button>
+    </div>
+    <div class="mbody">
+      <div class="row between" style="margin-bottom:10px">
+        <span class="mono muted" id="folderCurrent">Диски</span>
+        <span class="row" style="gap:6px">
+          <button class="btn ghost sm" id="folderNew" type="button">+ Создать папку</button>
+          <button class="btn ghost sm" id="folderDrives" type="button">Все диски</button>
+        </span>
+      </div>
+
+      <!-- создание папки: показывается по кнопке -->
+      <div class="folder-new hidden" id="folderNewRow">
+        <input type="text" id="folderNewName" maxlength="100" spellcheck="false"
+               placeholder="Имя новой папки" autocomplete="off">
+        <button class="btn primary sm" id="folderNewOk" type="button">Создать</button>
+        <button class="btn ghost sm" id="folderNewCancel" type="button">Отмена</button>
+      </div>
+
+      <div class="folder-list" id="folderList"></div>
+      <div class="auth-alert hidden" id="folderError" role="alert"></div>
+    </div>
+    <div class="mfoot">
+      <button class="btn ghost" id="folderCancel" type="button">Отмена</button>
+      <button class="btn primary" id="folderChoose" type="button">Выбрать эту папку</button>
+    </div>
+  </div>
+</div>
+
+<script src="/assets/ui.js"></script>
+<script src="/assets/steam.js"></script>
+<script src="/assets/folder-picker.js"></script>
+<script src="/assets/map.js"></script>
+<script src="/assets/app.js"></script>
+<script src="/assets/players.js"></script>
+<script src="/assets/admins.js"></script>
+<script src="/assets/mods.js"></script>
+<script src="/assets/logs.js"></script>
+<script src="/assets/loadouts.js"></script>
+</body>
+</html>

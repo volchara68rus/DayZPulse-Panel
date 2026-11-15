@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<title>DayZPulse — создание владельца</title>
+<link rel="stylesheet" href="/assets/theme.css">
+<link rel="stylesheet" href="/assets/auth.css">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+<div class="auth-wrap">
+  <main class="auth-card" style="--nh:rgba(74,144,217,.24);width:min(520px,100%)" role="main">
+    <div class="auth-brand">
+      <div class="logo" aria-hidden="true">DZ</div>
+      <div>
+        <b>DayZPulse</b>
+        <small>первый запуск панели</small>
+      </div>
+    </div>
+
+    <div class="auth-steps" aria-hidden="true">
+      <div class="auth-step active" id="stepOwner"><b>1. Владелец</b><small>учётная запись</small></div>
+      <div class="auth-step" id="stepSteam"><b>2. Steam</b><small>SteamCMD</small></div>
+      <div class="auth-step" id="stepDir"><b>3. Папка</b><small>каталог сервера</small></div>
+    </div>
+
+    <h1 class="auth-title">Создание владельца панели</h1>
+    <p class="auth-sub">
+      Учётных данных по умолчанию нет. Задайте владельца и папку сервера DayZ.
+      Эти данные хранятся только на этом компьютере.
+    </p>
+
+    <form id="setupForm" novalidate autocomplete="off">
+      <div class="field">
+        <label for="username">Имя владельца</label>
+        <input type="text" id="username" name="username" maxlength="32" spellcheck="false"
+               autocapitalize="none" placeholder="owner" required>
+        <div class="help">3–32 символа: латиница, цифры, «_», «-», «.».</div>
+      </div>
+
+      <div class="field">
+        <label for="password">Пароль</label>
+        <input type="password" id="password" name="password" maxlength="200"
+               autocomplete="new-password" required>
+        <div class="strength" id="strength" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+        <div class="strength-label" id="strengthLabel">Минимум 8 символов, две группы символов</div>
+      </div>
+
+      <div class="field">
+        <label for="passwordConfirm">Повторите пароль</label>
+        <input type="password" id="passwordConfirm" name="passwordConfirm" maxlength="200"
+               autocomplete="new-password" required>
+      </div>
+
+      <ul class="req-list" id="reqList">
+        <li data-req="length">Не менее 8 символов</li>
+        <li data-req="classes">Две группы: буквы, цифры или знаки</li>
+        <li data-req="nodictionary">Без распространённых слов и имени</li>
+        <li data-req="match">Пароли совпадают</li>
+      </ul>
+
+      <div class="field" style="margin-top:18px">
+        <label for="serverDirectory">Папка сервера DayZ *</label>
+        <div class="row" style="gap:10px;align-items:stretch">
+          <input type="text" id="serverDirectory" name="serverDirectory" spellcheck="false"
+                 placeholder="Выберите папку с сервером" style="flex:1" required>
+          <button class="btn" type="button" id="serverDirectoryBrowse"
+                  style="white-space:nowrap">Обзор…</button>
+        </div>
+        <div class="help">
+          Каталог для сервера DayZ. Если сервера там ещё нет, панель скачает его
+          позже — после входа в Steam. Сам SteamCMD ставится рядом с панелью.
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="webPort">Порт веб-панели</label>
+        <div class="row" style="gap:10px;align-items:stretch">
+          <input type="number" id="webPort" name="webPort" min="1" max="65535" value="8730"
+                 style="flex:1" required>
+          <button class="btn" type="button" id="webPortCheck" style="white-space:nowrap">Проверить</button>
+        </div>
+        <div class="help" id="webPortHint">
+          На этом порту панель откроется в браузере: <span class="mono">http://127.0.0.1:8730</span>.
+          Он должен быть свободен и не совпадать с игровыми портами.
+        </div>
+      </div>
+
+      <button class="btn primary block" type="submit" id="setupBtn">
+        <span id="setupBtnText">Создать владельца и войти</span>
+      </button>
+
+      <div class="steam-block" id="steamBlock">
+        <div class="steam-head">
+          <span class="steam-icon" aria-hidden="true">⚙</span>
+          <div>
+            <b>SteamCMD</b>
+            <small id="steamHint">папка не выбрана</small>
+          </div>
+        </div>
+
+        <!-- прогресс в стиле узлов: плоские сегменты -->
+        <div class="node-progress hidden" id="steamBar">
+          <div class="node-progress-head">
+            <span class="node-progress-phase" id="steamBarLabel">подготовка</span>
+            <span class="node-progress-value" id="steamBarValue">0%</span>
+          </div>
+          <div class="node-progress-rail">
+            <i id="steamBarFill" style="width:0%"></i>
+          </div>
+          <div class="node-progress-steps">
+            <span data-step="download">загрузка</span>
+            <span data-step="unpack">распаковка</span>
+            <span data-step="warmup">настройка</span>
+            <span data-step="done">готово</span>
+          </div>
+        </div>
+
+        <div class="help">
+          SteamCMD нужен панели для загрузки и обновления сервера DayZ из Steam.
+          Он скачивается в папку панели, а сервер DayZ — в выбранную папку.
+        </div>
+      </div>
+
+      <div class="auth-alert hidden" id="setupError" role="alert" aria-live="polite"></div>
+    </form>
+
+    <div class="auth-foot" id="setupFoot">
+      Пароль хранится как PBKDF2-хеш (SHA-256, 600 000 итераций) и никогда не сохраняется в открытом виде.
+    </div>
+  </main>
+</div>
+<!-- ==================== ВЫБОР ПАПКИ ==================== -->
+<div class="overlay" id="folderModal">
+  <div class="modal" style="max-width:560px" role="dialog" aria-modal="true" aria-labelledby="folderTitle">
+    <div class="mhead">
+      <b id="folderTitle">Выбор папки</b>
+      <button class="x" id="folderX" type="button" aria-label="Закрыть">×</button>
+    </div>
+    <div class="mbody">
+      <div class="row between" style="margin-bottom:10px">
+        <span class="mono muted" id="folderCurrent">Диски</span>
+        <span class="row" style="gap:6px">
+          <button class="btn ghost sm" id="folderNew" type="button">+ Создать папку</button>
+          <button class="btn ghost sm" id="folderDrives" type="button">Все диски</button>
+        </span>
+      </div>
+
+      <!-- создание папки: показывается по кнопке -->
+      <div class="folder-new hidden" id="folderNewRow">
+        <input type="text" id="folderNewName" maxlength="100" spellcheck="false"
+               placeholder="Имя новой папки" autocomplete="off">
+        <button class="btn primary sm" id="folderNewOk" type="button">Создать</button>
+        <button class="btn ghost sm" id="folderNewCancel" type="button">Отмена</button>
+      </div>
+
+      <div class="folder-list" id="folderList"></div>
+      <div class="auth-alert hidden" id="folderError" role="alert"></div>
+    </div>
+    <div class="mfoot">
+      <button class="btn ghost" id="folderCancel" type="button">Отмена</button>
+      <button class="btn primary" id="folderChoose" type="button">Выбрать эту папку</button>
+    </div>
+  </div>
+</div>
+
+<script src="/assets/steam.js"></script>
+<script src="/assets/folder-picker.js"></script>
+<script src="/assets/auth.js"></script>
+</body>
+</html>

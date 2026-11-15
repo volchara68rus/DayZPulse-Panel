@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<meta http-equiv="X-Content-Type-Options" content="nosniff">
+<title>DayZPulse — вход</title>
+<link rel="stylesheet" href="/assets/theme.css">
+<link rel="stylesheet" href="/assets/auth.css">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+<div class="auth-wrap">
+  <main class="auth-card" role="main">
+    <div class="auth-brand">
+      <div class="logo" aria-hidden="true">DZ</div>
+      <div>
+        <b>DayZPulse</b>
+        <small>панель управления сервером DayZ</small>
+      </div>
+    </div>
+
+    <h1 class="auth-title">Вход в панель</h1>
+    <p class="auth-sub">Доступ только для владельца панели. Все действия записываются в журнал аудита.</p>
+
+    <form id="loginForm" novalidate autocomplete="on">
+      <div class="field">
+        <label for="username">Владелец</label>
+        <input type="text" id="username" name="username" autocomplete="username"
+               maxlength="32" spellcheck="false" autocapitalize="none" required>
+      </div>
+
+      <div class="field">
+        <label for="password">Пароль</label>
+        <input type="password" id="password" name="password" autocomplete="current-password"
+               maxlength="200" required>
+      </div>
+
+      <button class="btn primary block" type="submit" id="loginBtn">
+        <span id="loginBtnText">Войти</span>
+      </button>
+
+      <div class="auth-alert hidden" id="loginError" role="alert" aria-live="polite"></div>
+    </form>
+
+    <div class="auth-foot" id="authFoot">
+      Панель работает локально. При доступе из локальной сети используйте защищённый туннель.
+    </div>  </main>
+</div>
+<script src="/assets/auth.js"></script>
+</body>
+</html>

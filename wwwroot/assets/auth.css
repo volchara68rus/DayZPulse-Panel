@@ -1,0 +1,152 @@
+/* ============================================================
+   DayZPulse — экраны доступа (вход и создание владельца)
+   ============================================================ */
+.auth-wrap{
+  min-height:100vh;display:grid;place-items:center;padding:28px 18px;
+}
+.auth-card{
+  width:min(430px,100%);position:relative;overflow:hidden;
+  background:linear-gradient(180deg,#151d26,#11171e);
+  border:1px solid var(--line);border-radius:14px;padding:30px 28px 26px;
+  box-shadow:0 40px 90px -30px #000, inset 0 1px 0 #ffffff08;
+  animation:authIn .3s ease;
+}
+.auth-card::before{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(130% 60% at 50% -12%, var(--nh, rgba(63,185,80,.24)), transparent 68%);
+}
+.auth-card>*{position:relative;z-index:1}
+@keyframes authIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+.auth-brand{display:flex;align-items:center;gap:13px;margin-bottom:24px}
+.auth-brand .logo{
+  width:46px;height:46px;border-radius:12px;flex:0 0 46px;position:relative;
+  background:linear-gradient(160deg,#54d96a,#1a7f37);
+  display:grid;place-items:center;font-weight:800;font-size:18px;color:#04150a;
+  box-shadow:0 0 0 1px #ffffff14, 0 6px 18px -6px var(--acc), inset 0 1px 0 #ffffff55;
+}
+.auth-brand b{font-size:17px;letter-spacing:.2px;display:block}
+.auth-brand small{display:block;color:var(--txt-3);font-size:11.5px;font-weight:600;margin-top:1px}
+
+.auth-title{font-size:15px;font-weight:700;margin-bottom:6px}
+.auth-sub{color:var(--txt-3);font-size:12.5px;margin-bottom:22px;line-height:1.55}
+
+.auth-card .field{margin-bottom:15px}
+.auth-card .btn.block{margin-top:8px}
+
+.auth-alert{
+  margin-top:16px;padding:11px 13px;border-radius:9px;font-size:12.5px;line-height:1.5;
+  background:#2a1614;border:1px solid #4a2420;color:#ffb3ad;
+}
+.auth-alert.ok{background:#0f2a1a;border-color:#1e4a2d;color:#9ce8b0}
+.auth-alert.info{background:#12243a;border-color:#1e3a5c;color:#a8ccf0}
+
+.auth-foot{margin-top:20px;padding-top:16px;border-top:1px solid var(--line);color:var(--txt-3);font-size:11.5px;line-height:1.6}
+
+/* индикатор надёжности пароля */
+.strength{display:flex;gap:4px;margin-top:8px}
+.strength i{flex:1;height:4px;border-radius:99px;background:#1b2531;transition:.25s}
+.strength.s1 i:nth-child(-n+1){background:var(--red)}
+.strength.s2 i:nth-child(-n+2){background:var(--amber)}
+.strength.s3 i:nth-child(-n+3){background:#b8c95a}
+.strength.s4 i:nth-child(-n+4){background:var(--acc)}
+.strength-label{font-size:11.5px;color:var(--txt-3);margin-top:6px}
+
+/* шаги на странице создания владельца */
+.auth-steps{display:flex;gap:8px;margin-bottom:22px}
+.auth-step{flex:1;text-align:center;padding:10px 6px;border-radius:9px;border:1px solid var(--line);background:#0f161d}
+.auth-step b{display:block;font-size:11.5px;color:var(--txt-2)}
+.auth-step small{color:var(--txt-3);font-size:10.5px}
+.auth-step.active{border-color:#2c6b3a;background:#0f2a1a}
+.auth-step.active b{color:#9ce8b0}
+
+/* сводка проверок пароля */
+.req-list{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:5px}
+.req-list li{font-size:12px;color:var(--txt-3);display:flex;align-items:center;gap:7px}
+.req-list li::before{content:"○";color:var(--txt-3);font-size:11px;line-height:1}
+.req-list li.ok{color:#8fe0a5}
+.req-list li.ok::before{content:"●";color:var(--acc)}
+
+/* ==================== SteamCMD ==================== */
+
+.steam-block{
+  margin-top:20px;padding-top:18px;border-top:1px solid var(--line);
+}
+.steam-head{display:flex;align-items:center;gap:11px}
+.steam-head b{font-size:13.5px;display:block}
+.steam-head small{display:block;color:var(--txt-3);font-size:11.5px}
+.steam-head .btn{margin-left:auto}
+.steam-icon{
+  width:34px;height:34px;flex:0 0 34px;border-radius:9px;
+  background:linear-gradient(160deg,#243244,#18202b);border:1px solid var(--line);
+  display:grid;place-items:center;font-size:16px;color:var(--txt-2);
+}
+.steam-icon.ok{background:#0f2a1a;border-color:#1e4a2d;color:#57d97a}
+.steam-icon.ok{background:#0f2a1a;border-color:#1e4a2d;color:#57d97a}
+
+/* прогресс в стиле узлов: плоские сегменты, как карточки-ноды */
+.node-progress{margin-top:14px}
+.node-progress-head{
+  display:flex;align-items:baseline;justify-content:space-between;margin-bottom:7px;
+}
+.node-progress-phase{
+  font-size:10.5px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--txt-2);
+}
+.node-progress-value{
+  font-size:12px;font-weight:800;color:var(--txt);
+  font-variant-numeric:tabular-nums;
+}
+.node-progress-rail{
+  height:6px;background:#0c1218;border:1px solid #1d2733;overflow:hidden;
+}
+.node-progress-rail i{
+  display:block;height:100%;width:0;
+  background:linear-gradient(90deg,#2a9e3d,#46c95a);
+  box-shadow:0 0 10px -2px var(--acc);
+  transition:width .35s cubic-bezier(.4,0,.2,1);
+}
+.node-progress-steps{
+  display:flex;gap:5px;margin-top:8px;
+}
+.node-progress-steps span{
+  flex:1;text-align:center;padding:4px 2px;
+  font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;
+  color:var(--txt-3);background:#0c1218;border:1px solid var(--line);
+}
+.node-progress-steps span.active{
+  color:#7fe39a;border-color:#2c6b3a;background:#0f2a1a;
+}
+.node-progress-steps span.done{
+  color:var(--txt-2);border-color:var(--line-2);background:#12181f;
+}
+
+/* ==================== выбор папки ====================
+   Стили .folder-* вынесены в theme.css: пикер используется
+   и на странице входа, и в панели. */
+
+/* поле порта подсвечивается по результату проверки
+   (селектор уточнён, чтобы перебить базовый стиль полей из theme.css) */
+.auth-card input.port-ok{
+  border-color:var(--acc);
+  box-shadow:0 0 0 3px #3fb95022;
+}
+.auth-card input.port-bad{
+  border-color:var(--red);
+  box-shadow:0 0 0 3px #e5534b22;
+}
+
+/* окно входа в Steam */
+.steam-modal-card{--nh:rgba(74,144,217,.24)}.steam-badge{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:3px 9px;border-radius:7px;font-size:11.5px;font-weight:700;
+  background:#12243a;border:1px solid #1e3a5c;color:#79b8ff;
+}
+
+/* прогресс в окне Steam */
+.steam-spinner{
+  width:16px;height:16px;border-radius:50%;flex:0 0 16px;
+  border:2px solid #2a3949;border-top-color:var(--blue);
+  animation:steamSpin .9s linear infinite;
+}
+@keyframes steamSpin{to{transform:rotate(360deg)}}
+.steam-row{display:flex;align-items:center;gap:10px;color:var(--txt-2);font-size:12.5px}

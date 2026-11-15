@@ -1,0 +1,257 @@
+/* ============================================================
+   DayZPulse — общая дизайн-система (стиль референса BulavaPanel)
+   ============================================================ */
+:root{
+  --bg:#0a0e13;
+  --grid:#151d27;
+  --node:#12181f;
+  --node-2:#161e27;
+  --node-head:#1b242f;
+  --line:#25313f;
+  --line-2:#33465a;
+  --txt:#e6edf3;
+  --txt-2:#93a1b1;
+  --txt-3:#5e6c7e;
+  --acc:#3fb950;
+  --blue:#4a90d9;
+  --amber:#d9a94a;
+  --red:#e5534b;
+  --violet:#a371f7;
+  --pink:#e06c9f;
+  --cyan:#35b8c4;
+  --radius:11px;
+  --radius-s:8px;
+  --mono:"Cascadia Mono","Consolas","JetBrains Mono",ui-monospace,monospace;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+
+body{
+  font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  background-color:var(--bg);
+  color:var(--txt);font-size:14px;-webkit-font-smoothing:antialiased;
+}
+
+/* Фон закреплён и не прокручивается вместе с содержимым. */
+body::before{
+  content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background-color:var(--bg);
+  background-image:
+    radial-gradient(circle at 18% 8%, #14243a55, transparent 42%),
+    radial-gradient(circle at 88% 92%, #2a183055, transparent 45%),
+    radial-gradient(rgba(120,150,190,.10) 1px, transparent 1.4px);
+  background-size:auto,auto,22px 22px;
+}
+
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:#26313d;border-radius:99px;border:2px solid transparent;background-clip:padding-box}
+::-webkit-scrollbar-thumb:hover{background:#36465a;background-clip:padding-box}
+::-webkit-scrollbar-track{background:transparent}
+
+button,input,select,textarea{font-family:inherit}
+.hidden{display:none !important}
+.mono{font-family:var(--mono);font-size:12.5px}
+.muted{color:var(--txt-3)}
+
+/* ===================== КНОПКИ ===================== */
+.btn{
+  border:1px solid var(--line);background:linear-gradient(180deg,#1a232e,#141b23);color:var(--txt);
+  padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:.15s;
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  box-shadow:inset 0 1px 0 #ffffff0a;text-decoration:none;
+}
+.btn:hover:not(:disabled){background:#1e2833;border-color:var(--line-2)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.primary{
+  background:linear-gradient(180deg,#46c95a,#2a9e3d);border-color:#3fb950;color:#04150a;
+  box-shadow:inset 0 1px 0 #ffffff44, 0 4px 14px -6px var(--acc);
+}
+.btn.primary:hover:not(:disabled){background:linear-gradient(180deg,#54d96a,#33ab47);filter:brightness(1.03)}
+.btn.danger{background:linear-gradient(180deg,#33201f,#241514);border-color:#5a2d2a;color:#ff9a92}
+.btn.danger:hover:not(:disabled){background:#3a2020;filter:brightness(1.05)}
+.btn.ghost{background:transparent;border-color:transparent;box-shadow:none}
+.btn.ghost:hover:not(:disabled){background:#1a222c}
+.btn.sm{padding:6px 10px;font-size:12px}
+.btn.block{width:100%}
+
+/* ===================== ПОЛЯ ===================== */
+label{display:block;font-size:12px;font-weight:600;color:var(--txt-2);margin-bottom:6px}
+input[type=text],input[type=number],input[type=password],select,textarea{
+  width:100%;background:#0c1218;border:1px solid var(--line);color:var(--txt);
+  padding:10px 12px;border-radius:8px;font-size:13.5px;transition:.15s;
+}
+input::placeholder,textarea::placeholder{color:var(--txt-3)}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px #3fb95022}
+.field{margin-bottom:16px}
+.help{color:var(--txt-3);font-size:11.5px;margin-top:6px;line-height:1.5}
+
+/* переключатель */
+.sw{position:relative;width:42px;height:24px;flex:0 0 42px}
+.sw input{opacity:0;width:0;height:0;position:absolute}
+.sw span{position:absolute;inset:0;background:#1b2531;border:1px solid var(--line);border-radius:99px;cursor:pointer;transition:.2s}
+.sw span::before{content:"";position:absolute;width:16px;height:16px;left:3px;top:3px;background:#8ea0b3;border-radius:50%;transition:.2s}
+.sw input:checked + span{background:#12351d;border-color:#2c6b3a}
+.sw input:checked + span::before{transform:translateX(18px);background:var(--acc)}
+.sw input:focus-visible + span{box-shadow:0 0 0 3px #3fb95033}
+
+.check{display:flex;align-items:center;gap:10px;color:var(--txt);font-size:13px;font-weight:500;cursor:pointer}
+.check input{width:auto;flex:0 0 auto;accent-color:var(--acc);cursor:pointer}
+
+/* ===================== МЕТКИ ===================== */
+.tag{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:7px;font-size:11.5px;font-weight:700;border:1px solid transparent;white-space:nowrap}
+.tag.on{background:#0f2a1a;color:#57d97a;border-color:#1e4a2d}
+.tag.warn{background:#2c2410;color:#e9c46a;border-color:#4a3c1a}
+.tag.off{background:#2a1614;color:#ff8a80;border-color:#4a2420}
+.tag.info{background:#12243a;color:#79b8ff;border-color:#1e3a5c}
+.tag.violet{background:#221833;color:#c4a7ff;border-color:#3a2a55}
+
+.pill{
+  display:inline-flex;align-items:center;gap:7px;padding:6px 12px;border-radius:99px;
+  background:#101820;border:1px solid var(--line);font-size:12.5px;font-weight:600;color:var(--txt-2);
+  white-space:nowrap;box-shadow:inset 0 1px 0 #ffffff08;
+}
+
+/* Единая цветовая схема состояний: включено — зелёное,
+   выключено — красное, ошибка или переход — оранжевое. */
+.pill.on{border-color:#1e4a2d;color:#7fe39a;background:#0f2a1a}
+.pill.off{border-color:#4a2420;color:#ff8a80;background:#2a1614}
+.pill.warn{border-color:#4a3c1a;color:#e9c46a;background:#2c2410}
+.pill.on b,.pill.off b,.pill.warn b{color:inherit}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--txt-3);flex:0 0 8px}
+.dot.online{background:var(--acc);box-shadow:0 0 8px var(--acc);animation:pulse 2s infinite}
+.dot.busy{background:var(--amber);box-shadow:0 0 8px var(--amber);animation:pulse 1.2s infinite}
+.dot.error{background:var(--red);box-shadow:0 0 8px var(--red)}
+@keyframes pulse{50%{opacity:.35}}
+
+/* ===================== КАРТОЧКИ ===================== */
+.card{
+  position:relative;overflow:hidden;
+  background:linear-gradient(180deg,#151d26,#11171e);
+  border:1px solid var(--line);border-radius:var(--radius);padding:18px;
+  box-shadow:0 12px 30px -18px #000, inset 0 1px 0 #ffffff08;
+}
+.card::before{
+  content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;
+  background:
+    radial-gradient(130% 60% at 50% -12%, var(--nh, rgba(74,144,217,.22)), transparent 68%),
+    linear-gradient(180deg, var(--nh, rgba(74,144,217,.16)), transparent 42%);
+}
+.card::after{
+  content:"";position:absolute;left:0;right:0;top:0;height:2px;
+  background:linear-gradient(90deg, transparent, var(--nh2, var(--blue)), transparent);
+  opacity:.75;
+}
+.card>*{position:relative;z-index:1}
+.card h2,.card h3{
+  font-size:12.5px;color:var(--txt-2);font-weight:700;display:flex;align-items:center;gap:8px;
+  margin:-18px -18px 14px;padding:13px 18px;text-transform:uppercase;letter-spacing:.6px;
+  border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg, color-mix(in srgb, var(--nh2, var(--blue)) 14%, transparent), transparent);
+}
+
+/* ===================== ТОСТЫ ===================== */
+.toasts{position:fixed;bottom:22px;right:22px;display:flex;flex-direction:column;gap:10px;z-index:9998;max-width:390px}
+.toast{
+  background:linear-gradient(180deg,#18212b,#121922);border:1px solid var(--line);
+  border-left:3px solid var(--acc);padding:12px 16px;border-radius:10px;
+  box-shadow:0 18px 40px -16px #000;min-width:260px;animation:slideIn .3s ease;position:relative;overflow:hidden;
+}
+.toast::before{content:"";position:absolute;inset:0;background:radial-gradient(120% 100% at 0% 0%, #3fb9501f, transparent 60%);pointer-events:none}
+.toast.error{border-left-color:var(--red)}
+.toast.error::before{background:radial-gradient(120% 100% at 0% 0%, #e5534b1f, transparent 60%)}
+.toast.warn{border-left-color:var(--amber)}
+.toast.warn::before{background:radial-gradient(120% 100% at 0% 0%, #d9a94a1f, transparent 60%)}
+.toast b{font-size:13.5px;position:relative;display:block}
+.toast p{color:var(--txt-2);font-size:12.5px;margin-top:2px;position:relative;word-break:break-word}
+@keyframes slideIn{from{transform:translateX(20px);opacity:0}to{transform:none;opacity:1}}
+
+/* ===================== МОДАЛКИ ===================== */
+.overlay{
+  position:fixed;inset:0;background:#0008;backdrop-filter:blur(4px);z-index:90;
+  display:none;align-items:center;justify-content:center;padding:20px;
+}
+.overlay.open{display:flex;animation:fade .18s}
+/* Подтверждение и ввод всегда поверх остальных модалок (открываются из них). */
+#confirmModal,#promptModal{z-index:120}
+.modal{
+  background:linear-gradient(180deg,#151d26,#11171e);border:1px solid var(--line);border-radius:14px;
+  width:100%;max-width:600px;box-shadow:0 40px 90px -24px #000;max-height:90vh;
+  display:flex;flex-direction:column;overflow:hidden;
+}
+.modal .mhead{
+  padding:16px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;
+  background:linear-gradient(180deg,#1a2431,#141b23);
+}
+.modal .mhead b{font-size:16px}
+.modal .mhead .x{margin-left:auto;cursor:pointer;color:var(--txt-3);font-size:18px;padding:2px 9px;border-radius:8px;background:none;border:none;line-height:1}
+.modal .mhead .x:hover{background:#1e2833;color:var(--txt)}
+.modal .mbody{padding:20px;overflow-y:auto}
+.modal .mfoot{
+  padding:16px 20px;border-top:1px solid var(--line);display:flex;gap:10px;justify-content:flex-end;background:#0e141b;
+}
+
+/* ===================== ТАБЛИЦЫ ===================== */
+.table{width:100%;border-collapse:collapse;font-size:13px}
+.table th,.table td{text-align:left;padding:10px;border-bottom:1px solid var(--line);vertical-align:middle}
+.table th{color:var(--txt-3);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+.table tbody tr:hover td{background:#161e2733}
+/* Кнопки действий внутри ячейки — во flex-обёртке, чтобы не ломать таблицу.
+   Сама ячейка прижата к правому краю. */
+.table th.actions,.table td.actions{text-align:right;white-space:nowrap;width:1%}
+.table td.actions .cell-actions{display:inline-flex;gap:6px;flex-wrap:nowrap;justify-content:flex-end}
+.empty-state{text-align:center;padding:44px 20px;color:var(--txt-3)}
+.empty-state .big{font-size:40px;margin-bottom:12px}
+.empty-state b{display:block;color:var(--txt-2);font-size:14px;margin-bottom:4px}
+
+/* ===================== ХЕЛПЕРЫ ===================== */
+.row{display:flex;gap:16px;flex-wrap:wrap;align-items:center}
+.row.between{justify-content:space-between}
+.row.end{justify-content:flex-end}
+.row>*{min-width:0}
+.grow{flex:1}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+.form-grid .wide{grid-column:1/-1}
+.kv{display:grid;grid-template-columns:200px 1fr;gap:9px 14px;font-size:13px}
+.kv dt{color:var(--txt-3)}
+.kv dd{margin:0;word-break:break-word}
+.stack-sm{display:flex;flex-direction:column;gap:8px}
+
+@media(max-width:1100px){
+  .grid-4{grid-template-columns:repeat(2,1fr)}
+  .grid-3{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:760px){
+  .grid-4,.grid-3,.grid-2{grid-template-columns:1fr}
+  .kv{grid-template-columns:1fr}
+}
+
+/* ===================== ВЫБОР ПАПКИ ===================== */
+/* Пикер используется и на странице входа, и в панели, поэтому стили здесь. */
+
+.folder-list{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;
+  max-height:340px;overflow-y:auto;align-content:start;
+  background:#0c1218;border:1px solid var(--line);border-radius:10px;padding:8px;
+}
+.folder-row{
+  display:flex;align-items:center;gap:8px;
+  min-width:0;width:100%;text-align:left;
+  background:#101821;border:1px solid var(--line);border-radius:8px;
+  color:var(--txt);font:inherit;font-size:13px;padding:9px 11px;cursor:pointer;
+  transition:background .15s,border-color .15s,color .15s;
+}
+.folder-row:hover{background:#18222d;border-color:var(--acc);color:var(--acc)}
+.folder-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.folder-row .ico{flex:0 0 auto;font-style:normal}
+
+/* «Наверх» занимает всю ширину списка. */
+.folder-row.folder-up{grid-column:1/-1;color:var(--txt-2);font-weight:600;background:#0e151c}
+.folder-row.folder-up:hover{color:var(--acc)}
+.folder-empty{grid-column:1/-1;color:var(--txt-3);font-size:12.5px;padding:16px;text-align:center}
+
+.folder-new{display:flex;gap:8px;align-items:center;margin-bottom:10px}
+.folder-new input{flex:1}
