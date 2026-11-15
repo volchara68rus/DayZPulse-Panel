@@ -1,0 +1,75 @@
+name: Сборка панели
+
+# Собирает DayZPulse.exe (self-contained, win-x64) и упаковывает его
+# в установщик, если установлен Inno Setup. Артефакты прикладываются
+# к запуску workflow, а на тег — к релизу.
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Код
+        uses: actions/checkout@v4
+
+      - name: .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Публикация (self-contained, win-x64)
+        run: >
+          dotnet publish DayZPulse.csproj
+          -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true
+          -p:EnableCompressionInSingleFile=false
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -o publish
+
+      - name: Артефакт (portable)
+        uses: actions/upload-artifact@v4
+        with:
+          name: DayZPulse-portable
+          path: publish/**
+          if-no-files-found: error
+
+      - name: Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Установщик
+        shell: pwsh
+        run: |
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { $iscc = "C:\Program Files\Inno Setup 6\ISCC.exe" }
+          if (-not (Test-Path $iscc)) { throw "Не найден ISCC.exe" }
+
+          # Установщик ждёт публикацию в dist\app — раскладываем её туда.
+          New-Item -ItemType Directory -Force dist\app | Out-Null
+          Copy-Item publish\* dist\app -Recurse -Force
+
+          & $iscc "/DAppVersion=2.0.4" installer\DayZPulse.iss
+
+      - name: Артефакт (установщик)
+        uses: actions/upload-artifact@v4
+        with:
+          name: DayZPulse-Setup
+          path: dist/DayZPulseSetup-*.exe
+          if-no-files-found: error
+
+      - name: Релиз (на тег)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/DayZPulseSetup-*.exe
+          generate_release_notes: true

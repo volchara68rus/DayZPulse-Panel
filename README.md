@@ -1,8 +1,13 @@
 # DayZPulse
 
 Панель управления серверами DayZ для Windows: локальный веб-интерфейс,
-служба Windows и значок в трее. Работает с собственным модом **DayZPulseCore**,
-который отдаёт данные о игроках и принимает команды.
+служба Windows и значок в трее. Работает с собственным модом **DayZPulse Mod**
+([DayZPulse-Mod](https://github.com/volchara68rus/DayZPulse-Mod)), который
+отдаёт данные об игроках и принимает команды.
+
+> Мод вынесен в отдельный репозиторий — здесь только панель.
+> Готовые сборки: **Releases** (установщик `DayZPulseSetup-*.exe`) и
+> артефакты workflow «Сборка панели».
 
 ## Возможности
 
@@ -58,7 +63,8 @@
 - Windows 10/11 или Windows Server
 - **.NET 10 Runtime** (для сборки — .NET 10 SDK)
 - Сервер DayZ Standalone (`DayZServer_x64.exe`)
-- Собственный мод `@DayZPulse` на сервере — для раздела «Игроки»
+- Мод `@DayZPulse` на сервере — для раздела «Игроки»
+  ([DayZPulse-Mod](https://github.com/volchara68rus/DayZPulse-Mod))
 
 ## Сборка
 
@@ -67,6 +73,15 @@ dotnet build                                  # отладка
 ./build.ps1                                   # публикация в ./publish
 ./build.ps1 -SelfContained -SingleFile        # один файл со встроенным рантаймом
 ```
+
+Установщик (панель одним `.exe` + Inno Setup):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File installer\build-setup.ps1
+```
+
+Готовый установщик появится в `dist\DayZPulseSetup-<версия>.exe`.
+Автоматическая сборка — в GitHub Actions (workflow «Сборка панели»).
 
 ## Запуск
 
