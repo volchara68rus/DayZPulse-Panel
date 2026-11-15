@@ -70,9 +70,12 @@
 
 ```powershell
 dotnet build                                  # отладка
+dotnet build DayZPulse.sln                    # то же через решение VS
 ./build.ps1                                   # публикация в ./publish
 ./build.ps1 -SelfContained -SingleFile        # один файл со встроенным рантаймом
 ```
+
+Проект открывается как решение **`DayZPulse.sln`** (Visual Studio / Rider).
 
 Установщик (панель одним `.exe` + Inno Setup):
 
