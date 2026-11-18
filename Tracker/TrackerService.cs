@@ -259,13 +259,39 @@ public sealed class TrackerService : BackgroundService
 
     // ------------------------------------------------------------- хранение
 
-    /// <summary>Состояние трекера хранится в папке сервера.</summary>
-    private string StatePath(string serverId)
+    /// <summary>Путь к базе данных трекера этого сервера (SQLite).</summary>
+    private string DbPath(string serverId)
     {
         var runtime = _registry.Get(serverId);
         return runtime is null
-            ? Path.Combine(AppPaths.DataRoot, $"tracker-{serverId}.json")
+            ? System.IO.Path.Combine(AppPaths.DataRoot, $"tracker-{serverId}.db")
+            : ServerPaths.StateFile(runtime.ServerSettings, "tracker.db");
+    }
+
+    /// <summary>Старый JSON-файл состояния (до перехода на базу данных).</summary>
+    private string LegacyJsonPath(string serverId)
+    {
+        var runtime = _registry.Get(serverId);
+        return runtime is null
+            ? System.IO.Path.Combine(AppPaths.DataRoot, $"tracker-{serverId}.json")
             : ServerPaths.StateFile(runtime.ServerSettings, "tracker.json");
+    }
+
+    private readonly Dictionary<string, TrackerDatabase> _databases = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>База данных трекера сервера (создаётся при первом обращении).</summary>
+    public TrackerDatabase Database(ServerRuntime runtime)
+    {
+        lock (_databases)
+        {
+            if (!_databases.TryGetValue(runtime.Id, out var database))
+            {
+                database = new TrackerDatabase(DbPath(runtime.Id));
+                _databases[runtime.Id] = database;
+            }
+
+            return database;
+        }
     }
 
     public void SaveState(ServerRuntime runtime)
@@ -273,21 +299,7 @@ public sealed class TrackerService : BackgroundService
         try
         {
             var state = runtime.Tracker.Export(runtime.Profile.Tracker.RetentionDays);
-            var json = Json.Serialize(state);
-            var path = StatePath(runtime.Id);
-            var temp = path + ".tmp";
-
-            File.WriteAllText(temp, json);
-
-            if (File.Exists(path))
-            {
-                File.Replace(temp, path, null, ignoreMetadataErrors: true);
-            }
-            else
-            {
-                File.Move(temp, path);
-            }
-
+            Database(runtime).Sync(state, runtime.Profile.Tracker.RetentionDays);
             _lastSave[runtime.Id] = DateTimeOffset.Now;
         }
         catch (Exception ex)
@@ -302,17 +314,31 @@ public sealed class TrackerService : BackgroundService
         {
             try
             {
-                var path = StatePath(runtime.Id);
-                if (!File.Exists(path))
+                var database = Database(runtime);
+                var retention = runtime.Profile.Tracker.RetentionDays;
+
+                // Первый запуск после обновления: переносим данные из старого
+                // JSON-файла в базу и оставляем файл как резервную копию.
+                // Признак «перенос уже был» — сам файл базы, а не его наличие
+                // с данными: даже пустая база считается созданной.
+                var jsonPath = LegacyJsonPath(runtime.Id);
+                if (!File.Exists(database.Path) && File.Exists(jsonPath))
                 {
-                    continue;
+                    var legacy = Json.Deserialize<PersistedState>(File.ReadAllText(jsonPath));
+                    if (legacy is not null)
+                    {
+                        database.Replace(legacy, retention);
+                        _logger.LogInformation(
+                            "[{Server}] Данные трекера перенесены из tracker.json в базу данных ({Players} игроков).",
+                            runtime.Name, legacy.Players.Length);
+                    }
                 }
 
-                var state = Json.Deserialize<PersistedState>(File.ReadAllText(path));
+                var state = database.Load();
                 if (state is not null)
                 {
                     runtime.Tracker.Import(state);
-                    _logger.LogInformation("[{Server}] Состояние трекера загружено: {Players} игроков в базе.",
+                    _logger.LogInformation("[{Server}] Состояние трекера загружено из базы: {Players} игроков.",
                         runtime.Name, state.Players.Length);
                 }
             }

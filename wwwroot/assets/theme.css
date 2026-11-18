@@ -166,6 +166,16 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--acc);box
 .toast p{color:var(--txt-2);font-size:12.5px;margin-top:2px;position:relative;word-break:break-word}
 @keyframes slideIn{from{transform:translateX(20px);opacity:0}to{transform:none;opacity:1}}
 
+/* Залипающее уведомление (не закрывается само): крестик и кнопки действий. */
+.toast.sticky{padding-top:14px}
+.toast-x{
+  position:absolute;top:6px;right:8px;z-index:2;background:none;border:none;cursor:pointer;
+  color:var(--txt-3);font-size:16px;line-height:1;padding:2px 6px;border-radius:7px;
+}
+.toast-x:hover{background:#1e2833;color:var(--txt)}
+.toast-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;position:relative}
+.toast-actions .btn{white-space:nowrap}
+
 /* ===================== МОДАЛКИ ===================== */
 .overlay{
   position:fixed;inset:0;background:#0008;backdrop-filter:blur(4px);z-index:90;

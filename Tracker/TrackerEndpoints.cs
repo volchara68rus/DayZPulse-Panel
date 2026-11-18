@@ -982,9 +982,15 @@ public static class TrackerEndpoints
         });
 
         api.MapPost("/servers/{serverId}/tracker/database/{id}/note", (string id, NoteRequest request, string serverId,
-            ServerRegistry registry, AuditLog audit, HttpContext ctx) =>
+            ServerRegistry registry, TrackerService tracker, AuditLog audit, HttpContext ctx) =>
         {
-            Require(registry, serverId).Tracker.SetNote(id, request.Note ?? "", request.Watch ?? false);
+            var runtime = Require(registry, serverId);
+            runtime.Tracker.SetNote(id, request.Note ?? "", request.Watch ?? false);
+
+            // Заметка и наблюдение — важные данные: сохраняем сразу, не
+            // дожидаясь периодического сброса состояния.
+            tracker.SaveState(runtime);
+
             audit.Write(Actor(ctx), "tracker.note", id, null);
             return Results.Ok(new { ok = true });
         });

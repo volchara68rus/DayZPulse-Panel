@@ -61,6 +61,8 @@ public static class AppBootstrap
         builder.Services.AddSingleton<PanelModService>();
         builder.Services.AddSingleton<ServerLogService>();
         builder.Services.AddSingleton<LoadoutService>();
+        builder.Services.AddSingleton<DayZPulse.Web.WebUiUpdateService>();
+        builder.Services.AddHostedService<DayZPulse.Web.WebUiCheckService>();
 
         var memoryLogProvider = new InMemoryLogProvider(ParseLevel(settings.Current.Logging.MinimumLevel));
         builder.Services.AddSingleton(memoryLogProvider);
@@ -158,6 +160,35 @@ public static class AppBootstrap
 
         var app = builder.Build();
 
+        // Если панель обновили через установщик, старая обновлённая веб-часть
+        // из каталога данных перекрыла бы новую встроенную вёрстку: отбрасываем
+        // её до того, как настроим отдачу статики (удалять каталог после
+        // создания провайдера файлов нельзя).
+        DayZPulse.Web.WebUiUpdateService.CleanupStaleOverride(settings, preLoggerFactory.CreateLogger("WebUi"));
+
+        // Веб-часть может быть обновлена отдельно от панели: тогда её копия
+        // лежит в каталоге данных (ProgramData), куда пишут без прав
+        // администратора. Каталог создаём заранее (пусть даже пустой), чтобы
+        // составной провайдер видел и файлы, появившиеся после обновления —
+        // иначе их подхватил бы только перезапуск. Обновлённые файлы имеют
+        // приоритет, отсутствующие берутся из встроенной копии.
+        Directory.CreateDirectory(AppPaths.WebUiOverride);
+
+        var webRootProviders = new List<Microsoft.Extensions.FileProviders.IFileProvider>
+        {
+            new Microsoft.Extensions.FileProviders.PhysicalFileProvider(AppPaths.WebUiOverride)
+        };
+
+        // Встроенная копия может отсутствовать (например, при запуске с
+        // --data-dir в отдельный каталог): добавляем её, только если она есть.
+        if (Directory.Exists(AppPaths.EmbeddedWebRoot))
+        {
+            webRootProviders.Add(new Microsoft.Extensions.FileProviders.PhysicalFileProvider(AppPaths.EmbeddedWebRoot));
+        }
+
+        app.Environment.WebRootFileProvider = new Microsoft.Extensions.FileProviders.CompositeFileProvider(
+            [.. webRootProviders]);
+
         app.UseSecurityHeaders();
         app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(20) });
         app.UseRateLimiter();
@@ -245,12 +276,19 @@ public static class AppBootstrap
         app.Map("/ws/events", LiveHub.Endpoint);
 
         // Браузеры запрашивают /favicon.ico автоматически — отдаём ту же иконку.
-        app.MapGet("/favicon.ico", (IWebHostEnvironment environment) =>
+        app.MapGet("/favicon.ico", () =>
         {
-            var path = Path.Combine(environment.WebRootPath ?? AppPaths.WebRoot, "assets", "favicon.svg");
-            return File.Exists(path)
-                ? Results.File(path, "image/svg+xml")
-                : Results.NotFound();
+            // Ищем в обновлённой веб-части, затем во встроенной.
+            foreach (var root in new[] { AppPaths.WebUiOverride, AppPaths.EmbeddedWebRoot })
+            {
+                var path = Path.Combine(root, "assets", "favicon.svg");
+                if (File.Exists(path))
+                {
+                    return Results.File(path, "image/svg+xml");
+                }
+            }
+
+            return Results.NotFound();
         });
 
         return app;

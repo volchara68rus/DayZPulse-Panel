@@ -106,6 +106,29 @@ const Players = (() => {
         return td;
     }
 
+    /**
+     * Ячейка SteamID64: если это настоящий SteamID (17 цифр), id ведёт
+     * ссылкой на профиль Steam. Иначе показываем как обычный текст.
+     */
+    function steamCell(value) {
+        const text = value ?? '';
+        if (!/^\d{17}$/.test(text)) return cell(text, 'mono');
+
+        const td = document.createElement('td');
+        td.className = 'mono';
+        const link = document.createElement('a');
+        link.className = 'steam-link';
+        link.href = `https://steamcommunity.com/profiles/${text}`;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.title = 'Открыть профиль в Steam';
+        link.textContent = text;
+        // Ссылка не должна открывать карточку игрока по клику на строку.
+        link.addEventListener('click', (event) => event.stopPropagation());
+        td.appendChild(link);
+        return td;
+    }
+
     function clear(node) {
         while (node.firstChild) node.removeChild(node.firstChild);
     }
@@ -230,7 +253,7 @@ const Players = (() => {
 
             tr.appendChild(name);
 
-            tr.appendChild(cell(player.plainId || player.id, 'mono'));
+            tr.appendChild(steamCell(player.plainId || player.id));
 
             // Пинг есть у мода, но точнее он от RCON; показываем, если известен.
             tr.appendChild(cell(player.ping > 0 ? `${player.ping} ms` : '—', 'mono'));
@@ -452,7 +475,7 @@ const Players = (() => {
             }
             tr.appendChild(name);
 
-            tr.appendChild(cell(player.plainId || player.id, 'mono'));
+            tr.appendChild(steamCell(player.plainId || player.id));
             tr.appendChild(cell(fmtTime(player.lastSeen)));
             tr.appendChild(cell(player.sessions));
             tr.appendChild(cell(fmtDuration(player.playtimeSeconds)));
@@ -487,7 +510,18 @@ const Players = (() => {
             const name = live?.name || record.name || id;
 
             text('playerModalName', name);
-            text('playerModalId', live?.plainId || record.plainId || id);
+
+            // Ссылка на профиль Steam: у онлайн-игрока — из мода, иначе из базы.
+            const steamId = live?.plainId || record.plainId || '';
+            const steam = el('playerModalSteam');
+            text('playerModalId', steamId || id);
+            if (steam) {
+                // SteamID64 — 17 цифр. Для BI id ссылка не имеет смысла.
+                const isSteam = /^\d{17}$/.test(steamId);
+                steam.href = isSteam ? `https://steamcommunity.com/profiles/${steamId}` : '#';
+                steam.classList.toggle('disabled', !isSteam);
+                steam.title = isSteam ? 'Открыть профиль в Steam' : 'Профиль Steam недоступен';
+            }
 
             // Статус игрока в шапке.
             const stateTag = el('playerModalStateTag');
@@ -500,11 +534,10 @@ const Players = (() => {
             const stats = el('playerModalStats');
             clear(stats);
             const rows = [
-                ['BI id', record.id ?? id],
-                ['SteamID64', live?.plainId || record.plainId || '—'],
                 ['Статус', live ? (live.alive ? 'в сети, жив' : 'в сети, мёртв') : 'не в сети'],
                 ['Здоровье', live ? `${Math.round(live.health)} / ${Math.round(live.maxHealth)}` : '—'],
                 ['Позиция', live ? `${fmtCoord(live.pos.x)} : ${fmtCoord(live.pos.z)}` : '—'],
+                ['BI id', record.id ?? id],
                 ['Первый вход', fmtTime(record.firstSeen)],
                 ['Последний вход', fmtTime(record.lastSeen)],
                 ['Сессий', record.sessions ?? 0],
@@ -515,12 +548,19 @@ const Players = (() => {
             ];
 
             for (const [key, value] of rows) {
-                const dt = document.createElement('dt');
-                dt.textContent = key;
-                const dd = document.createElement('dd');
-                dd.textContent = value ?? '—';
-                stats.appendChild(dt);
-                stats.appendChild(dd);
+                const item = document.createElement('div');
+                item.className = 'pm-fact';
+
+                const k = document.createElement('span');
+                k.className = 'k';
+                k.textContent = key;
+
+                const v = document.createElement('b');
+                v.textContent = value ?? '—';
+
+                item.appendChild(k);
+                item.appendChild(v);
+                stats.appendChild(item);
             }
 
             const mods = el('playerModalMods');
@@ -560,6 +600,10 @@ const Players = (() => {
 
             const actions = el('playerModalQuick');
             clear(actions);
+
+            // Инвентарь теперь отдельным окном — кнопка есть всегда.
+            actions.appendChild(actionButton('🎒 Инвентарь', () => openInventory(id, name, !!live)));
+
             if (live) {
                 actions.appendChild(actionButton('Лечить', () => command('heal', { id })));
                 actions.appendChild(actionButton('Сказать', () => promptMessage({ id, name })));
@@ -570,23 +614,33 @@ const Players = (() => {
                 const hint = document.createElement('span');
                 hint.className = 'muted';
                 hint.style.fontSize = '12.5px';
-                hint.textContent = 'Игрок не в сети — действия доступны только онлайн. Инвентарь показан из последнего снимка.';
+                hint.textContent = 'Игрок не в сети — действия доступны только онлайн, инвентарь — из последнего снимка.';
                 actions.appendChild(hint);
             }
-
-            // Инвентарь: у онлайн-игрока — живой, у оффлайн — из кэша (только чтение).
-            currentPlayerId = id;
-            currentPlayerOnline = !!live;
-            paletteDragTarget = null;
-            await ensureCatalog();
-            updatePaletteFilterHint();
-            renderPalette(el('invSearch')?.value ?? '');
-            await loadInventory(id);
 
             el('playerModal').classList.add('open');
         } catch (error) {
             App.toast('Игрок не найден', error.message, 'error');
         }
+    }
+
+    /**
+     * Открывает отдельное окно инвентаря. Выдача предметов доступна
+     * только онлайн-игрокам, оффлайн — просмотр последнего снимка.
+     */
+    async function openInventory(id, name, online) {
+        currentPlayerId = id;
+        currentPlayerOnline = !!online;
+        paletteDragTarget = null;
+
+        text('playerInvWho', name || id);
+
+        await ensureCatalog();
+        updatePaletteFilterHint();
+        renderPalette(el('invSearch')?.value ?? '');
+        await loadInventory(id);
+
+        el('playerInvModal')?.classList.add('open');
     }
 
     /* ------------------------------------------------------------ инвентарь */
@@ -1865,6 +1919,7 @@ const Players = (() => {
 
             el('launchArgs').value = data.arguments ?? '';
             el('launchExtra').value = data.extraArguments ?? '';
+            el('launchPortEdit').value = data.port ?? '';
             text('launchPort', data.port ?? '—');
             text('launchMods', data.mods || '—');
             text('launchServerMods', data.serverMods || '—');
@@ -1887,7 +1942,8 @@ const Players = (() => {
     function launchChanged() {
         if (!launchBaseline) return false;
         return el('launchArgs').value !== (launchBaseline.arguments ?? '') ||
-            el('launchExtra').value !== (launchBaseline.extraArguments ?? '');
+            el('launchExtra').value !== (launchBaseline.extraArguments ?? '') ||
+            Number(el('launchPortEdit').value) !== Number(launchBaseline.port ?? 0);
     }
 
     function markLaunchDirty() {
@@ -1908,7 +1964,8 @@ const Players = (() => {
                 method: 'PUT',
                 body: {
                     arguments: el('launchArgs').value,
-                    extraArguments: el('launchExtra').value
+                    extraArguments: el('launchExtra').value,
+                    port: Number(el('launchPortEdit').value) || null
                 }
             });
             App.toast(
@@ -2228,6 +2285,11 @@ const Players = (() => {
             if (event.target.id === 'playerModal') el('playerModal').classList.remove('open');
         });
 
+        el('playerInvClose')?.addEventListener('click', () => el('playerInvModal').classList.remove('open'));
+        el('playerInvModal')?.addEventListener('click', (event) => {
+            if (event.target.id === 'playerInvModal') el('playerInvModal').classList.remove('open');
+        });
+
         el('trackerSave')?.addEventListener('click', saveConfig);
         el('trackerRotate')?.addEventListener('click', rotateToken);
         el('trackerCardInstall')?.addEventListener('click', () => App.showView('mods'));
@@ -2237,6 +2299,7 @@ const Players = (() => {
         el('launchReload')?.addEventListener('click', loadLaunch);
         el('launchArgs')?.addEventListener('input', markLaunchDirty);
         el('launchExtra')?.addEventListener('input', markLaunchDirty);
+        el('launchPortEdit')?.addEventListener('input', markLaunchDirty);
 
         el('launchAdvanced')?.addEventListener('click', openLaunchModal);
         el('launchModalX')?.addEventListener('click', () => el('launchModal')?.classList.remove('open'));

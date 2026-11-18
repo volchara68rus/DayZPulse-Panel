@@ -30,6 +30,21 @@ public static class AppPaths
     /// <summary>Веб-интерфейс панели (встроен рядом с исполняемым файлом).</summary>
     public static string WebRoot => Path.Combine(BaseDirectory, "wwwroot");
 
+    /// <summary>
+    /// Встроенная копия веб-части: всегда рядом с исполняемым файлом, даже
+    /// если каталог данных вынесен флагом <c>--data-dir</c>. Служит основой,
+    /// которую дополняет обновлённая веб-часть из <see cref="WebUiOverride"/>.
+    /// </summary>
+    public static string EmbeddedWebRoot => Path.Combine(AppContext.BaseDirectory, "wwwroot");
+
+    /// <summary>
+    /// Обновляемая веб-часть в каталоге данных. Если она есть, панель отдаёт
+    /// статику отсюда, а не из встроенной копии рядом с исполняемым файлом.
+    /// Каталог данных (ProgramData) доступен для записи без прав администратора,
+    /// поэтому веб-часть обновляется независимо от установщика.
+    /// </summary>
+    public static string WebUiOverride => Path.Combine(DataRoot, "wwwroot");
+
     public static void Initialize(string? overrideBaseDirectory = null, bool ensure = true)
     {
         if (!string.IsNullOrWhiteSpace(overrideBaseDirectory))

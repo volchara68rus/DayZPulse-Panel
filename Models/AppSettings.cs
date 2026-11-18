@@ -8,9 +8,13 @@ namespace DayZPulse.Models;
 public sealed class AppSettings
 {
     public WebSettings Web { get; set; } = new();
+    public WebUiSettings WebUi { get; set; } = new();
     public AuthSettings Auth { get; set; } = new();
     public LoggingSettings Logging { get; set; } = new();
     public SteamSettings Steam { get; set; } = new();
+
+    /// <summary>Общие заметки панели для администраторов.</summary>
+    public List<PanelNote> Notes { get; set; } = [];
 
     /// <summary>Серверы DayZ, которыми управляет панель. Может быть пустым до добавления первого.</summary>
     public List<ServerProfile> Servers { get; set; } = [];
@@ -239,6 +243,52 @@ public sealed class WebSettings
     public bool OpenBrowserOnStart { get; set; } = true;
 
     public string Url => $"http://{(AllowRemote ? "0.0.0.0" : BindAddress)}:{Port}";
+}
+
+/// <summary>
+/// Обновляемая веб-часть панели (вёрстка, стили, скрипты). Обновляется
+/// отдельно от исполняемого файла: скачивается с сайта и кладётся в каталог
+/// данных, откуда панель отдаёт статику в приоритете над встроенной копией.
+/// </summary>
+public sealed class WebUiSettings
+{
+    /// <summary>Версия установленной веб-части. Пусто — используется встроенная.</summary>
+    public string Version { get; set; } = "";
+
+    /// <summary>Когда веб-часть обновлялась в последний раз.</summary>
+    public DateTimeOffset? UpdatedAt { get; set; }
+
+    /// <summary>Проверять обновления веб-части автоматически при запуске.</summary>
+    public bool AutoCheck { get; set; } = true;
+}
+
+/// <summary>
+/// Заметка администраторов панели. Общая для всей панели: любой админ видит и
+/// оставляет заметки. Прочтение — по имени пользователя: кто открыл ленту,
+/// тот и отметился прочитавшим.
+/// </summary>
+public sealed class PanelNote
+{
+    /// <summary>Стабильный идентификатор заметки.</summary>
+    public string Id { get; set; } = "";
+
+    /// <summary>Автор заметки.</summary>
+    public string Author { get; set; } = "";
+
+    /// <summary>Текст заметки.</summary>
+    public string Text { get; set; } = "";
+
+    public DateTimeOffset CreatedAt { get; set; }
+
+    /// <summary>Пользователи, которые прочли заметку.</summary>
+    public List<NoteRead> Reads { get; set; } = [];
+}
+
+/// <summary>Отметка о прочтении заметки конкретным пользователем.</summary>
+public sealed class NoteRead
+{
+    public string User { get; set; } = "";
+    public DateTimeOffset At { get; set; }
 }
 
 /// <summary>Учётная запись администратора панели с ограниченными правами.</summary>

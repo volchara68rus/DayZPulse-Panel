@@ -14,7 +14,7 @@
 ; ------------------------------------------------------------
 
 #ifndef AppVersion
-  #define AppVersion "2.0.6"
+  #define AppVersion "2.1.3"
 #endif
 
 #define AppName "DayZ Pulse"

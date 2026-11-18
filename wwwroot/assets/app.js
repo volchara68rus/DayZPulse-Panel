@@ -167,7 +167,9 @@ function renderServersSummary(data) {
     setText('ovTotal', servers.length);
     setText('ovOnline', running);
     setText('ovPlayers', servers.reduce((sum, s) => sum + (s.playersAlive ?? 0), 0));
-    setText('ovTrackers', servers.filter((s) => s.trackerConnected).length);
+
+    // Заметки: бейдж с числом непрочитанных обновляется вместе со сводкой.
+    refreshNotesBadge();
     setText('pageCrumb', servers.length
         ? `${servers.length} серв. · ${running} работает`
         : 'нет серверов');
@@ -182,6 +184,33 @@ function renderServersSummary(data) {
     const topbar = document.querySelector('.topbar');
     topbar?.classList.toggle('no-servers', servers.length === 0);
     topbar?.classList.toggle('all-servers', currentView === 'servers' || servers.length === 0);
+
+    renderServerPill();
+}
+
+/**
+ * Пилюля выбранного сервера в шапке. Видна на страницах конкретного
+ * сервера; на «Все серверы» прячется, потому что там выбор неважен.
+ */
+function renderServerPill() {
+    const pill = $('srvPill');
+    if (!pill) return;
+
+    const item = currentServer();
+    const show = !!item && currentView !== 'servers';
+
+    pill.classList.toggle('hidden', !show);
+    // Когда видна пилюля сервера, подзаголовок раздела избыточен:
+    // он занимает место, и шапка переполняется на средних экранах.
+    document.querySelector('.topbar')?.classList.toggle('has-srv-pill', show);
+    if (!show) return;
+
+    setText('srvPillName', item.name ?? item.id);
+    $('srvPillDot').className = 'sdot ' + serverDot(item);
+    pill.title = `${item.name ?? item.id} · ${item.stateText ?? ''} — открыть список серверов`;
+
+    // Пилюля меняет ширину шапки (прячет подзаголовок) — пересчитываем режим.
+    if (typeof scheduleHeadCompact === 'function') scheduleHeadCompact();
 }
 
 /** Класс точки состояния по серверу. */
@@ -636,11 +665,20 @@ async function selectServer(id) {
     // Данные предыдущего сервера больше не показываем.
     clearChildren($('console'));
     clearChildren($('liveRows'));
+    resetDashboard();
 
     // Переключение должно ощущаться мгновенным: сразу обновляем подсветку
     // выбранного сервера, а данные и статус подтягиваем параллельно.
     renderSidebarServers();
     renderServerCards();
+
+    // Сводка настроек берётся из уже загруженных данных сервера — рисуем сразу.
+    renderDashboardSettings(server(currentServerId) ?? servers[0]);
+
+    // Пилюля сервера в шапке должна показать новый сервер сразу, не дожидаясь
+    // опроса статуса (иначе оставалось прежнее имя).
+    renderServerPill();
+    scheduleHeadCompact();
 
     if (typeof Players !== 'undefined') Players.reset();
 
@@ -656,6 +694,7 @@ function refreshCurrentViewAsync() {
 function refreshCurrentView() {
     switch (currentView) {
         case 'servers': loadServers(); break;
+        case 'dashboard': startDashboard(); refreshStatus(); break;
         case 'configs': loadQuickSettings(); break;
         case 'mods': Players?.loadConfig(); Mods?.load(); break;
         case 'logs': Logs?.load(); Players?.loadCommands(); break;
@@ -993,6 +1032,16 @@ function connectLive() {
                 if (typeof SteamUI !== 'undefined') SteamUI.applyPush(message.data);
                 applyServerInstallPush(message.data);
                 break;
+
+            case 'web-ui':
+                // Панель нашла обновление веб-части: отмечаем точку и
+                // показываем уведомление с кнопками.
+                if (message.data?.available && !message.data?.upToDate) {
+                    $('webUiDot')?.classList.add('on');
+                    if (currentView === 'service') loadWebUi();
+                    showWebUiUpdateNotice(message.data.remoteVersion);
+                }
+                break;
         }
     };
 
@@ -1059,7 +1108,7 @@ function loadCurrentView() {
     if (name === 'logs') { Logs?.load(); Players?.loadCommands(); }
     if (name === 'backups') loadBackups();
     if (name === 'schedule') loadSchedule();
-    if (name === 'service') { loadService(); loadApplicationInfo(); }
+    if (name === 'service') { loadService(); loadApplicationInfo(); loadWebUi(); }
     if (name === 'settings') loadSettings();
     if (name === 'security') { loadSecurity(); loadAudit(); }
     if (name === 'players') { Players.start(); Players.loadConfig(); Players.loadDatabase(); if (typeof Loadouts !== 'undefined') Loadouts.load(); }
@@ -1095,6 +1144,7 @@ function syncServerGate() {
     const [title, crumb] = TITLES[currentView] ?? [];
     setText('pageTitle', gated ? 'Сервер не установлен' : title);
     setText('pageCrumb', gated ? 'сначала скачайте сервер DayZ' : crumb);
+    renderServerPill();
 
     // Заглушка исчезла — раздел, который под ней, не был загружен.
     const unblocked = gateActive && !gated;
@@ -1361,9 +1411,23 @@ async function api(path, options = {}) {
     return data;
 }
 
-function toast(title, message = '', kind = 'info', timeout = 5000) {
+/**
+ * Показывает всплывающее уведомление.
+ * options.sticky — не закрывать по таймеру (закрывается крестиком).
+ * options.actions — кнопки: [{ label, kind, onClick }].
+ */
+function toast(title, message = '', kind = 'info', timeout = 5000, options = {}) {
     const box = document.createElement('div');
-    box.className = 'toast' + (kind === 'error' ? ' error' : kind === 'warn' ? ' warn' : '');
+    box.className = 'toast' + (kind === 'error' ? ' error' : kind === 'warn' ? ' warn' : '')
+        + (options.sticky ? ' sticky' : '');
+
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'toast-x';
+    close.setAttribute('aria-label', 'Закрыть');
+    close.textContent = '×';
+    close.addEventListener('click', () => box.remove());
+    box.appendChild(close);
 
     const strong = document.createElement('b');
     strong.textContent = title;
@@ -1375,8 +1439,30 @@ function toast(title, message = '', kind = 'info', timeout = 5000) {
         box.appendChild(p);
     }
 
+    if (options.actions?.length) {
+        const row = document.createElement('div');
+        row.className = 'toast-actions';
+
+        for (const action of options.actions) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'btn sm' + (action.kind ? ' ' + action.kind : '');
+            button.textContent = action.label;
+            button.addEventListener('click', () => action.onClick?.(button, box));
+            row.appendChild(button);
+        }
+
+        box.appendChild(row);
+    }
+
     $('toasts').appendChild(box);
-    setTimeout(() => box.remove(), timeout);
+
+    // Залипающие уведомления держатся, пока их не закроют.
+    if (!options.sticky && timeout > 0) {
+        setTimeout(() => box.remove(), timeout);
+    }
+
+    return box;
 }
 
 function setText(id, value) {
@@ -1513,6 +1599,9 @@ function showView(name) {
 
     if (name !== 'players' && name !== 'livemap' && name !== 'chat') Players.stop();
     if (name !== 'dashboard') stopDashboard();
+
+    // Шапка на разных разделах разной ширины — пересчитываем компактный режим.
+    scheduleHeadCompact();
 }
 
 /** Обновляет текст заглушки по состоянию загрузки сервера. */
@@ -1678,6 +1767,32 @@ document.querySelectorAll('.subtab').forEach((tab) => {
     });
 });
 
+/**
+ * Открывает модалку настроек сервера и подсвечивает поле автоперезапуска —
+ * сюда ведёт значок автоперезапуска в шапке.
+ */
+function openAutoRestartSettings() {
+    openServerSettingsModal();
+
+    // Небольшая задержка вместо requestAnimationFrame: rAF не вызывается,
+    // когда вкладка не отрисовывается (свёрнутое окно), а подсветка нужна.
+    setTimeout(() => {
+        const row = $('setAutoRestart')?.closest('.check') ?? $('setAutoRestart');
+        const field = $('setRestartDelay')?.closest('.field');
+        for (const node of [row, field]) {
+            if (!node) continue;
+            node.classList.remove('flash');
+            // Перезапуск анимации: без reflow повторный клик не сработал бы.
+            void node.offsetWidth;
+            node.classList.add('flash');
+            setTimeout(() => node.classList.remove('flash'), 2600);
+        }
+
+        row?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        $('setAutoRestart')?.focus({ preventScroll: true });
+    }, 400);
+}
+
 /* сворачивание боковой панели */
 const SIDEBAR_KEY = 'dayzpulse.sidebar.collapsed';
 
@@ -1791,13 +1906,10 @@ function applyStatus(status) {
         const onlineBar = $('dashOnlineBar');
         if (onlineBar) onlineBar.style.width = '0%';
         setText('dashFps', '—');
-        setText('dashPing', '—');
         setText('dashCpuVal', '—');
         setText('dashThreadsVal', '—');
         fpsHistory = [];
-        pingHistory = [];
         drawFpsChart('dashFpsSpark', [], '#4a90d9');
-        drawSpark('dashPingSpark', [], '#35b8c4');
         setPlayerCount(0);
     }
 
@@ -1819,18 +1931,39 @@ function applyStatus(status) {
     const ramBar = $('dashRamBar');
     if (ramBar) ramBar.style.width = ramPercent.toFixed(1) + '%';
 
-    const tag = $('autoRestartTag');
-    if (tag) {
+    const autoIcon = $('autoRestartBtn');
+    const autoCount = $('autoRestartCount');
+    const autoText = $('hmAutoRestartText');
+    if (autoIcon) {
+        let title, warn = false, badge = 0;
+
         if (status.autoRestartArmed) {
-            tag.textContent = 'автоперезапуск через ' + (loadedSettings?.server?.autoRestartDelaySeconds ?? '') + ' с';
-            tag.className = 'tag warn';
+            const delay = loadedSettings?.server?.autoRestartDelaySeconds ?? '';
+            title = `Автоперезапуск взведён: перезапуск через ${delay} с`;
+            warn = true;
         } else if (status.autoRestartsInWindow > 0) {
-            tag.textContent = `автоперезапусков: ${status.autoRestartsInWindow}`;
-            tag.className = 'tag warn';
+            title = `Автоперезапусков в окне лимита: ${status.autoRestartsInWindow}`;
+            warn = true;
+            badge = status.autoRestartsInWindow;
+        } else if (loadedSettings?.server?.autoRestartOnCrash) {
+            title = 'Автоперезапуск включён: перезапускать после сбоя';
         } else {
-            tag.textContent = 'автоперезапуск: выкл.';
-            tag.className = 'tag off';
+            title = 'Автоперезапуск выключен — нажмите, чтобы настроить';
         }
+
+        autoIcon.title = title;
+        autoIcon.classList.toggle('warn', warn);
+        if (autoCount) {
+            autoCount.textContent = badge > 0 ? String(badge) : '';
+            autoCount.classList.toggle('hidden', badge === 0);
+        }
+
+        const autoWord = status.autoRestartArmed ? 'взведён'
+            : status.autoRestartsInWindow > 0 ? `перезапусков: ${status.autoRestartsInWindow}`
+            : loadedSettings?.server?.autoRestartOnCrash ? 'включён' : 'выключен';
+        setText('hmAutoRestartText', 'Автоперезапуск: ' + autoWord);
+        const hmAuto = $('hmAutoRestart');
+        hmAuto?.classList.toggle('active', warn);
     }
 
     const running = !!status.running;
@@ -1842,6 +1975,9 @@ function applyStatus(status) {
     $('btnHeadStop').disabled = !running;
     $('btnSend').disabled = !running;
     $('commandInput').disabled = !running;
+
+    // Узкий экран: обновляем сводку и кнопки в меню-кнопке.
+    if (typeof syncHeadMenu === 'function') syncHeadMenu();
 
     setText('serverDirLabel', status.workingDirectory || 'C:\\DayZServer');
 
@@ -1883,15 +2019,22 @@ async function refreshStatus() {
 let hostTotalMemoryBytes = 0;
 let dashboardTimer = null;
 let fpsHistory = [];
-let pingHistory = [];
 
 /** Загружает данные дашборда: онлайн, FPS, пинг, историю, события. */
 async function loadDashboard() {
     const item = currentServer();
     if (!item) return;
 
+    // Запоминаем, для какого сервера запрос: быстрый ответ предыдущего
+    // сервера не должен перезаписать данные текущего.
+    const requestedId = currentServerId;
+
     try {
         const data = await api(sp('/tracker/dashboard'));
+
+        if (requestedId !== currentServerId) {
+            return;
+        }
 
         setText('dashOnline', data.players ?? 0);
         setText('dashSlots', data.slots ?? 0);
@@ -1902,14 +2045,8 @@ async function loadDashboard() {
         const bar = $('dashOnlineBar');
         if (bar) bar.style.width = percent.toFixed(1) + '%';
 
-        // FPS и пинг: 0 означает «нет данных» — показываем прочерк.
+        // FPS: 0 означает «нет данных» — показываем прочерк.
         setText('dashFps', data.fps > 0 ? `${Math.round(data.fps)} fps` : '—');
-        setText('dashPing', data.pingAvg > 0 ? `${data.pingAvg} ms` : '—');
-
-        if (data.pingAvg > 0) {
-            pingHistory.push(Math.round(data.pingAvg));
-            while (pingHistory.length > 40) pingHistory.shift();
-        }
 
         if (data.fps > 0) {
             fpsHistory.push(Math.round(data.fps));
@@ -1918,19 +2055,107 @@ async function loadDashboard() {
 
         // График под цвет карточки FPS: плавная линия с заливкой вниз.
         drawFpsChart('dashFpsSpark', fpsHistory, '#4a90d9');
-        drawSpark('dashPingSpark', pingHistory, '#35b8c4');
+
+        // Онлайн за 24 часа: график по числу игроков.
+        const online = data.online24h ?? [];
+        const peak = online.reduce((max, p) => Math.max(max, p.players ?? 0), 0);
+        setText('dashOnline24', peak > 0 ? `${peak}` : '—');
+        drawSpark('dashOnlineSpark', online.map((p) => p.players ?? 0), '#35b8c4');
 
         setText('dashThreadsVal', data.threadCount > 0 ? `${data.threadCount}` : '—');
 
-        drawOnlineChart(data.online24h ?? []);
-
         // Ресурсы: диск — заполнение тома, где лежит сервер.
         updateDiskUsage(item);
+
+        renderDashboardSettings(item);
 
         await loadDashboardEvents();
     } catch {
         // Дашборд — не критичный раздел.
     }
+}
+
+/** Компактная сводка настроек сервера в карточке дашборда. */
+function renderDashboardSettings(item) {
+    const box = $('dashSettingsSummary');
+    if (!box) return;
+
+    box.textContent = '';
+
+    // Список серверов отдаёт эти поля на верхнем уровне объекта.
+    const rows = [
+        ['Папка', item?.baseDirectory || '—'],
+        ['Порт', item?.port ? String(item.port) : '—'],
+        ['Карта', item?.mapLabel || '—']
+    ];
+
+    for (const [key, value] of rows) {
+        box.appendChild(factCell(key, value));
+    }
+
+    // Цвет показываем образцом, а не строкой HEX.
+    box.appendChild(colorFactCell('Цвет', item?.color));
+}
+
+/** Плитка факта: подпись + значение. */
+function factCell(key, value) {
+    const cell = document.createElement('div');
+    cell.className = 'pm-fact';
+
+    const k = document.createElement('span');
+    k.className = 'k';
+    k.textContent = key;
+
+    const v = document.createElement('b');
+    v.textContent = value ?? '—';
+    v.title = value ?? '';
+
+    cell.appendChild(k);
+    cell.appendChild(v);
+    return cell;
+}
+
+/** Плитка факта с образцом цвета. */
+function colorFactCell(key, color) {
+    const cell = document.createElement('div');
+    cell.className = 'pm-fact';
+
+    const k = document.createElement('span');
+    k.className = 'k';
+    k.textContent = key;
+
+    const value = color || '#3fb950';
+
+    const row = document.createElement('span');
+    row.className = 'color-swatch-row';
+
+    const swatch = document.createElement('span');
+    swatch.className = 'color-swatch';
+    swatch.style.background = value;
+
+    const label = document.createElement('b');
+    label.textContent = colorName(value);
+
+    row.appendChild(swatch);
+    row.appendChild(label);
+    cell.appendChild(k);
+    cell.appendChild(row);
+    return cell;
+}
+
+/** Человеческое имя цвета по HEX. */
+function colorName(color) {
+    const map = {
+        '#3fb950': 'Зелёный',
+        '#4a90d9': 'Синий',
+        '#a371f7': 'Фиолетовый',
+        '#d9a94a': 'Янтарный',
+        '#e5534b': 'Красный',
+        '#35b8c4': 'Бирюзовый',
+        '#e06c9f': 'Розовый'
+    };
+
+    return map[(color ?? '').toLowerCase()] ?? (color || 'по умолчанию');
 }
 
 /**
@@ -2027,55 +2252,6 @@ function drawSpark(id, values, color) {
     svg.appendChild(line);
 }
 
-/** График онлайна за 24 часа (заполненная область + линия). */
-function drawOnlineChart(points) {
-    const svg = $('dashOnlineChart');
-    const empty = $('dashOnlineEmpty');
-    if (!svg) return;
-
-    svg.innerHTML = '';
-
-    if (!points || points.length < 2) {
-        if (empty) empty.style.display = 'block';
-        return;
-    }
-
-    if (empty) empty.style.display = 'none';
-
-    const width = 700;
-    const height = 160;
-    const max = Math.max(...points.map((p) => p.players), 1);
-
-    const coords = points.map((p, i) => {
-        const x = (i / (points.length - 1)) * width;
-        const y = height - (p.players / max) * (height - 16) - 8;
-        return [x, y];
-    });
-
-    const line = coords.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
-    const area = `M0,${height} L${line.replace(/ /g, ' L')} L${width},${height} Z`;
-
-    const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-    defs.innerHTML =
-        '<linearGradient id="dashOnlineGrad" x1="0" y1="0" x2="0" y2="1">' +
-        '<stop offset="0%" stop-color="#3fb950" stop-opacity=".38"/>' +
-        '<stop offset="100%" stop-color="#3fb950" stop-opacity="0"/></linearGradient>';
-
-    const fill = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    fill.setAttribute('d', area);
-    fill.setAttribute('fill', 'url(#dashOnlineGrad)');
-
-    const stroke = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
-    stroke.setAttribute('points', line);
-    stroke.setAttribute('fill', 'none');
-    stroke.setAttribute('stroke', '#3fb950');
-    stroke.setAttribute('stroke-width', '2.5');
-
-    svg.appendChild(defs);
-    svg.appendChild(fill);
-    svg.appendChild(stroke);
-}
-
 /** Размер папки сервера на диске. */
 async function updateDiskUsage(item) {
     try {
@@ -2110,10 +2286,17 @@ async function loadDashboardEvents() {
     const box = $('dashEvents');
     if (!box) return;
 
+    // Как и у дашборда, отбрасываем ответы не текущего сервера.
+    const requestedId = currentServerId;
+
     const [kills, chat] = await Promise.all([
         api(sp('/tracker/kills?limit=8')).catch(() => []),
         api(sp('/tracker/chat?limit=8')).catch(() => [])
     ]);
+
+    if (requestedId !== currentServerId) {
+        return;
+    }
 
     const events = [];
 
@@ -2197,6 +2380,41 @@ function stopDashboard() {
     }
 }
 
+/**
+ * Очищает дашборд при переключении сервера: без этого старые значения
+ * (онлайн, FPS, история) висели бы, пока не придут данные нового сервера.
+ */
+function resetDashboard() {
+    stopDashboard();
+    fpsHistory = [];
+
+    setText('dashOnline', 0);
+    setText('dashSlots', 0);
+    const bar = $('dashOnlineBar');
+    if (bar) bar.style.width = '0%';
+
+    setText('dashFps', '—');
+    setText('dashOnline24', '—');
+    setText('dashUptime', '—');
+    setText('dashStartedAt', 'с последнего рестарта');
+    setText('dashCpuVal', '—');
+    setText('dashRamVal', '—');
+    setText('dashDiskVal', '—');
+    setText('dashThreadsVal', '—');
+
+    drawFpsChart('dashFpsSpark', [], '#4a90d9');
+    drawSpark('dashOnlineSpark', [], '#35b8c4');
+    const cpuBar = $('dashCpuBar');
+    if (cpuBar) cpuBar.style.width = '0%';
+    const ramBar = $('dashRamBar');
+    if (ramBar) ramBar.style.width = '0%';
+    const diskBar = $('dashDiskBar');
+    if (diskBar) diskBar.style.width = '0%';
+
+    const events = $('dashEvents');
+    if (events) clearChildren(events);
+}
+
 async function serverAction(action, label) {
     const name = currentServer()?.name ?? 'сервер';
     try {
@@ -2230,6 +2448,25 @@ $('btnHeadStop')?.addEventListener('click', () => {
     const name = currentServer()?.name ?? 'сервер';
     askConfirm(`Остановить «${name}»? Игроки будут отключены.`, () => serverAction('stop', 'Остановка сервера'), 'Остановить');
 });
+
+// Те же действия в меню узкого экрана.
+$('hmStart')?.addEventListener('click', () => { closeHeadMenu(); serverAction('start', 'Запуск сервера'); });
+$('hmStop')?.addEventListener('click', () => {
+    closeHeadMenu();
+    const name = currentServer()?.name ?? 'сервер';
+    askConfirm(`Остановить «${name}»? Игроки будут отключены.`, () => serverAction('stop', 'Остановка сервера'), 'Остановить');
+});
+$('hmRestart')?.addEventListener('click', () => {
+    closeHeadMenu();
+    const name = currentServer()?.name ?? 'сервер';
+    askConfirm(`Перезапустить «${name}»?`, () => serverAction('restart', 'Перезапуск сервера'), 'Перезапустить');
+});
+$('hmAdmins')?.addEventListener('click', () => { closeHeadMenu(); showView('security'); });
+
+// Значок автоперезапуска в шапке и его дубль в меню узкого экрана
+// ведут к настройке автоперезапуска.
+$('autoRestartBtn')?.addEventListener('click', openAutoRestartSettings);
+$('hmAutoRestart')?.addEventListener('click', () => { closeHeadMenu(); openAutoRestartSettings(); });
 
 /** Отправляет команду моду DayZPulse (быстрые действия дашборда). */
 async function dashModCommand(action, args, label) {
@@ -2323,6 +2560,127 @@ document.addEventListener('click', (event) => {
 document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') closeSysMenu();
 });
+
+/* -------------------------------------- меню шапки (узкий экран) */
+
+// На узком экране состояние и управление сервером прячутся в одну кнопку,
+// иначе кнопки переносились на вторую строку и вылезали за шапку.
+const headMoreBtn = $('headMoreBtn');
+const headMenu = $('headMenu');
+
+function openHeadMenu() {
+    if (!headMenu || !headMoreBtn) return;
+
+    headMenu.classList.remove('hidden');
+
+    // Меню fixed: кладём его под кнопкой, выравнивая по правому краю.
+    const menuW = headMenu.offsetWidth;
+    const menuH = headMenu.offsetHeight;
+    const btn = headMoreBtn.getBoundingClientRect();
+
+    let left = btn.right - menuW;
+    let top = btn.bottom + 8;
+
+    left = Math.max(8, Math.min(left, window.innerWidth - menuW - 8));
+    if (top + menuH > window.innerHeight - 8) {
+        top = btn.top - menuH - 8;
+    }
+
+    headMenu.style.left = left + 'px';
+    headMenu.style.top = top + 'px';
+    headMoreBtn.setAttribute('aria-expanded', 'true');
+}
+
+function closeHeadMenu() {
+    if (!headMenu) return;
+    headMenu.classList.add('hidden');
+    headMoreBtn?.setAttribute('aria-expanded', 'false');
+}
+
+function toggleHeadMenu() {
+    if (!headMenu) return;
+    if (headMenu.classList.contains('hidden')) openHeadMenu();
+    else closeHeadMenu();
+}
+
+headMoreBtn?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    toggleHeadMenu();
+});
+
+window.addEventListener('resize', () => { closeHeadMenu(); scheduleHeadCompact(); });
+
+document.addEventListener('click', (event) => {
+    if (headMenu?.classList.contains('hidden')) return;
+    if (event.target.closest('#headMoreBtn')) return;
+    if (event.target.closest('#headMenu')) return;
+    closeHeadMenu();
+});
+
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeHeadMenu();
+});
+
+/**
+ * Сворачивает состояние и управление в одну кнопку, если они не помещаются.
+ * Считаем по факту (а не по фиксированной ширине): элементы бывают разной
+ * ширины («автоперезапуск через 60 с» шире, чем «выкл.»).
+ */
+function updateHeadCompact() {
+    const bar = document.querySelector('.topbar');
+    if (!bar) return;
+
+    // На «Все серверы» и без серверов эти элементы и так скрыты.
+    if (bar.classList.contains('no-servers') || bar.classList.contains('all-servers')) {
+        bar.classList.remove('head-compact');
+        closeHeadMenu();
+        return;
+    }
+
+    // Пробуем широкий режим и смотрим, помещается ли содержимое.
+    const wasCompact = bar.classList.contains('head-compact');
+    bar.classList.remove('head-compact');
+
+    if (bar.scrollWidth - bar.clientWidth > 1) {
+        bar.classList.add('head-compact');
+    } else if (wasCompact) {
+        closeHeadMenu();
+    }
+}
+
+/** Пересчитывает компактный режим после перерисовки раскладки. */
+let headCompactPending = false;
+function scheduleHeadCompact() {
+    if (headCompactPending) return;
+    headCompactPending = true;
+    requestAnimationFrame(() => {
+        headCompactPending = false;
+        updateHeadCompact();
+    });
+}
+
+/**
+ * Дублирует состояние сервера и кнопки управления в меню узкого экрана.
+ * Скрытые в шапке элементы остаются рабочими, поэтому просто копируем
+ * значения, а обработчики навешиваем на кнопки меню отдельно.
+ */
+function syncHeadMenu() {
+    setText('headMoreText', lastStatus?.stateText ?? '—');
+    if ($('headMoreDot')) $('headMoreDot').className = 'dot ' + stateClass(lastStatus?.state ?? '');
+
+    setText('hmStateText', lastStatus?.stateText ?? '—');
+    if ($('hmStateDot')) $('hmStateDot').className = 'dot ' + stateClass(lastStatus?.state ?? '');
+    if ($('hmStatePill')) $('hmStatePill').className = 'pill ' + statePillClass(lastStatus?.state ?? '');
+    setText('hmPlayers', lastPlayerCount ?? lastStatus?.players ?? 0);
+
+    const running = !!lastStatus?.running;
+    if ($('hmStart')) $('hmStart').disabled = running || lastStatus?.state === 'Starting';
+    if ($('hmStop')) $('hmStop').disabled = !running;
+    if ($('hmRestart')) $('hmRestart').disabled = !running;
+    $('hmAdmins')?.classList.toggle('hidden', !sessionIsOwner);
+
+    scheduleHeadCompact();
+}
 
 /* ============================================================ консоль */
 
@@ -2689,10 +3047,6 @@ function renderQuick() {
         if (el) el.textContent = text;
     };
 
-    view('qcHostname', quickValue('server', 'hostname') || '—');
-    view('qcMaxPlayers', quickValue('server', 'maxPlayers') || '—');
-    view('qcRconEnabled', quickValue('server', '__rconEnabled') === '1' ? 'включён' : 'выключен');
-    view('qmBaseDamage', quickValue('gameplay', 'GeneralData.disableBaseDamage') === '1' ? 'выключен' : 'разрешён');
     view('qmLighting', quickValue('gameplay', 'WorldsData.lightingConfig') === '1' ? 'темнее' : 'светлее');
     view('qmStamina', quickValue('gameplay', 'PlayerData.StaminaData.staminaMax') || '—');
 
@@ -3752,6 +4106,339 @@ async function serviceAction(action, label) {
     }
 }
 
+/* -------------------------------------------------------- заметки админов */
+
+let notesState = { notes: [], unread: 0, user: '' };
+
+/** Обновляет бейдж непрочитанных заметок на странице «Все серверы». */
+async function refreshNotesBadge() {
+    try {
+        const data = await api('/notes');
+        notesState = data ?? { notes: [], unread: 0, user: '' };
+        applyNotesBadge();
+    } catch {
+        // Заметки — не критичный раздел.
+    }
+}
+
+function applyNotesBadge() {
+    const badge = $('ovNotesBadge');
+    const count = $('ovNotesCount');
+
+    // На карточке показываем число непрочитанных (или всего, если всё прочитано).
+    setText('ovNotesCount', notesState.unread > 0 ? notesState.unread : notesState.notes.length);
+
+    if (badge) {
+        badge.textContent = String(notesState.unread);
+        badge.classList.toggle('hidden', !notesState.unread);
+        badge.title = notesState.unread > 0
+            ? `Непрочитанных заметок: ${notesState.unread}`
+            : 'Все заметки прочитаны';
+
+        // Список прочитавших — в подсказке бейджа.
+        badge.dataset.readers = notesState.notes
+            .filter((n) => n.unread)
+            .flatMap((n) => n.readBy ?? [])
+            .join(', ');
+    }
+}
+
+/** Открывает модалку заметок и отмечает их прочитанными. */
+async function openNotes() {
+    const modal = $('notesModal');
+    if (!modal) return;
+
+    await refreshNotesBadge();
+    renderNotes();
+    setText('notesSub', notesState.user ? `вы: ${notesState.user}` : '');
+    modal.classList.add('open');
+
+    // Открыл ленту — значит прочитал: отмечаем на сервере.
+    if (notesState.unread > 0) {
+        try {
+            await api('/notes/read', { method: 'POST' });
+            await refreshNotesBadge();
+            renderNotes();
+        } catch { /* отметка не критична */ }
+    }
+}
+
+/** Рисует список заметок. */
+function renderNotes() {
+    const list = $('notesList');
+    if (!list) return;
+
+    list.textContent = '';
+
+    if (!notesState.notes.length) {
+        const empty = document.createElement('div');
+        empty.className = 'empty-state';
+        empty.textContent = 'Заметок пока нет. Напишите первую — её увидят все администраторы.';
+        list.appendChild(empty);
+        return;
+    }
+
+    for (const note of notesState.notes) {
+        const row = document.createElement('div');
+        row.className = 'note-row' + (note.unread ? ' unread' : '');
+
+        const head = document.createElement('div');
+        head.className = 'note-head';
+
+        const author = document.createElement('b');
+        author.textContent = note.author || 'админ';
+
+        const time = document.createElement('span');
+        time.className = 'muted mono';
+        time.style.fontSize = '11.5px';
+        time.textContent = formatTime(note.createdAt);
+
+        head.appendChild(author);
+        head.appendChild(time);
+
+        if (note.unread) {
+            const fresh = document.createElement('span');
+            fresh.className = 'note-new';
+            fresh.textContent = 'новая';
+            head.appendChild(fresh);
+        }
+
+        // Кто прочитал — иконка со списком имён в подсказке.
+        const readers = document.createElement('span');
+        readers.className = 'note-readers';
+        readers.textContent = '👁';
+        readers.title = (note.readBy ?? []).length
+            ? 'Прочитали: ' + note.readBy.join(', ')
+            : 'Пока никто не прочитал';
+
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'note-del';
+        remove.title = 'Удалить заметку';
+        remove.textContent = '×';
+        remove.addEventListener('click', async () => {
+            try {
+                await api('/notes/' + encodeURIComponent(note.id), { method: 'DELETE' });
+                await refreshNotesBadge();
+                renderNotes();
+            } catch (error) {
+                toast('Не удалось удалить', error.message, 'error');
+            }
+        });
+
+        const tools = document.createElement('span');
+        tools.className = 'note-tools';
+        tools.appendChild(readers);
+        tools.appendChild(remove);
+
+        head.appendChild(tools);
+
+        const text = document.createElement('div');
+        text.className = 'note-text';
+        text.textContent = note.text;
+
+        row.appendChild(head);
+        row.appendChild(text);
+        list.appendChild(row);
+    }
+}
+
+/** Отправляет новую заметку. */
+async function addNote() {
+    const input = $('noteInput');
+    const text = (input?.value ?? '').trim();
+    if (!text) return;
+
+    const button = $('noteAdd');
+    button.disabled = true;
+
+    try {
+        await api('/notes', { method: 'POST', body: { text } });
+        input.value = '';
+        await refreshNotesBadge();
+        renderNotes();
+    } catch (error) {
+        toast('Не удалось добавить', error.message, 'error');
+    } finally {
+        button.disabled = false;
+    }
+}
+
+$('ovNotesOpen')?.addEventListener('click', openNotes);
+$('notesX')?.addEventListener('click', () => $('notesModal')?.classList.remove('open'));
+$('notesModal')?.addEventListener('click', (event) => {
+    if (event.target.id === 'notesModal') $('notesModal').classList.remove('open');
+});
+$('noteAdd')?.addEventListener('click', addNote);
+$('noteInput')?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+        event.preventDefault();
+        addNote();
+    }
+});
+
+/* -------------------------------------------- веб-интерфейс (обновление) */
+
+let webUiPollTimer = null;
+
+// Ссылка на одно залипающее уведомление об обновлении: повторные проверки
+// не должны плодить их десятками.
+let webUiNotice = null;
+
+/** Показывает залипающее уведомление об обновлении веб-части с кнопками. */
+function showWebUiUpdateNotice() {
+    if (webUiNotice && document.body.contains(webUiNotice)) {
+        return;
+    }
+
+    webUiNotice = toast('Доступно обновление веб-интерфейса',
+        'Обновите панель, чтобы применить новую вёрстку и скрипты. Служба останавливаться не будет.',
+        'info', 0, {
+            sticky: true,
+            actions: [
+                {
+                    label: 'Обновить', kind: 'primary',
+                    onClick: () => installWebUiUpdate()
+                },
+                {
+                    label: 'Позже',
+                    onClick: (_button, box) => box.remove()
+                }
+            ]
+        });
+}
+
+/** Запускает установку обновления веб-части с прогрессом. */
+async function installWebUiUpdate() {
+    try {
+        paintWebUiProgress(0, 'подготовка');
+        startWebUiPoll();
+        await api('/web-ui/install', { method: 'POST' });
+    } catch (error) {
+        clearInterval(webUiPollTimer);
+        webUiPollTimer = null;
+        $('webUiProgress')?.classList.add('hidden');
+        toast('Не удалось обновить', error.message, 'error', 9000);
+        loadWebUi();
+    }
+}
+
+/** Загружает состояние веб-части и показывает доступность обновления. */
+async function loadWebUi() {
+    const info = $('webUiInfo');
+    if (!info) return;
+
+    try {
+        const data = await api('/web-ui');
+
+        const updateAvailable = data.available && !data.upToDate;
+
+        // Статус словами — без номеров версий.
+        const status = !data.available
+            ? 'сайт недоступен'
+            : updateAvailable ? 'доступно обновление' : 'актуальная версия';
+
+        const rows = [
+            ['Веб-интерфейс', data.overridden ? 'обновлённый' : 'встроенный'],
+            ['Обновления', status],
+            ['Источник', data.baseUrl || '—']
+        ];
+
+        info.textContent = '';
+        for (const [key, value] of rows) {
+            const dt = document.createElement('dt');
+            dt.textContent = key;
+            const dd = document.createElement('dd');
+            dd.textContent = value ?? '—';
+            info.appendChild(dt);
+            info.appendChild(dd);
+        }
+
+        $('webUiInstall').disabled = !updateAvailable || data.busy;
+        $('webUiInstall').textContent = updateAvailable
+            ? 'Обновить веб-часть'
+            : 'Обновление не требуется';
+        $('webUiDot').classList.toggle('on', updateAvailable);
+        $('webUiReset').disabled = !data.overridden;
+
+        const autoCheck = $('webUiAutoCheck');
+        if (autoCheck && document.activeElement !== autoCheck) autoCheck.checked = !!data.autoCheck;
+
+        if (data.busy) {
+            paintWebUiProgress(data.progress, data.phase);
+            startWebUiPoll();
+        }
+    } catch (error) {
+        info.textContent = 'Не удалось получить состояние: ' + error.message;
+    }
+}
+
+function paintWebUiProgress(percent, phase) {
+    $('webUiProgress')?.classList.remove('hidden');
+    setText('webUiPhase', phase || 'обновление');
+    setText('webUiPercent', (percent ?? 0) + '%');
+    if ($('webUiFill')) $('webUiFill').style.width = (percent ?? 0) + '%';
+}
+
+function startWebUiPoll() {
+    if (webUiPollTimer) return;
+    webUiPollTimer = setInterval(async () => {
+        try {
+            const data = await api('/web-ui');
+            paintWebUiProgress(data.progress, data.phase);
+
+            if (!data.busy) {
+                clearInterval(webUiPollTimer);
+                webUiPollTimer = null;
+                $('webUiProgress')?.classList.add('hidden');
+                await loadWebUi();
+                // Скрипты и стили изменились: перезагружаем страницу, чтобы
+                // браузер взял новую веб-часть.
+                toast('Веб-часть обновлена', 'Перезагружаем страницу…', 'info', 2500);
+                setTimeout(() => window.location.reload(), 1200);
+            }
+        } catch {
+            clearInterval(webUiPollTimer);
+            webUiPollTimer = null;
+        }
+    }, 700);
+}
+
+$('webUiCheck')?.addEventListener('click', async () => {
+    const button = $('webUiCheck');
+    button.disabled = true;
+    button.textContent = 'Проверка…';
+    await loadWebUi();
+    button.disabled = false;
+    button.textContent = 'Проверить обновление';
+});
+
+$('webUiInstall')?.addEventListener('click', () => {
+    askConfirm('Скачать и установить обновление веб-интерфейса? Служба останавливаться не будет.',
+        installWebUiUpdate, 'Обновить');
+});
+
+$('webUiReset')?.addEventListener('click', () => {
+    askConfirm('Удалить обновлённую веб-часть и вернуться к встроенной версии?',
+        async () => {
+            try {
+                await api('/web-ui', { method: 'DELETE' });
+                loadWebUi();
+            } catch (error) {
+                toast('Не удалось', error.message, 'error');
+            }
+        }, 'Вернуть встроенную');
+});
+
+$('webUiAutoCheck')?.addEventListener('change', async (event) => {
+    try {
+        await api('/web-ui/autocheck', { method: 'PUT', body: { enabled: event.target.checked } });
+    } catch (error) {
+        toast('Не удалось сохранить', error.message, 'error');
+        event.target.checked = !event.target.checked;
+    }
+});
+
 $('btnInstallService').addEventListener('click', () => {
     askConfirm('Установить DayZPulse как службу Windows с автозапуском?', () => serviceAction('install', 'Установка службы'), 'Установить');
 });
@@ -3823,21 +4510,14 @@ async function loadSettings() {
         const s = serverData.server;
         const profile = serverData.profile;
 
-        $('setServerName').value = profile.name ?? '';
         $('setServerColor').value = profile.color ?? '#3fb950';
+        $('setServerName').value = profile.name ?? '';
         $('setBaseDir').value = s.baseDirectory ?? 'C:\\DayZServer';
         $('setWorkDir').value = s.workingDirectory ?? '';
         $('setExecutableName').value = s.executableName ?? '';
         $('setExe').value = s.executablePath ?? '';
-        $('setPort').value = s.port;
         $('setConfig').value = s.configFile ?? '';
         $('setProfiles').value = s.profilesDirectory ?? '';
-        $('setMods').value = s.mods ?? '';
-        $('setRconEnabled').checked = s.rconEnabled !== false;
-        $('setRconPort').value = s.rconPort || '';
-        $('setRconPassword').value = s.rconPassword ?? '';
-        $('setArgs').value = s.arguments ?? '';
-        $('setExtra').value = s.extraArguments ?? '';
         $('setStopCommand').value = s.stopCommand ?? '';
         $('setGraceful').value = s.gracefulStopSeconds;
         $('setRestartDelay').value = s.autoRestartDelaySeconds;
@@ -3955,15 +4635,8 @@ function collectServerSettings() {
     base.workingDirectory = $('setWorkDir').value.trim();
     base.executableName = $('setExecutableName').value.trim();
     base.executablePath = $('setExe').value.trim();
-    base.port = Number($('setPort').value);
     base.configFile = $('setConfig').value.trim();
     base.profilesDirectory = $('setProfiles').value.trim();
-    base.mods = $('setMods').value.trim();
-    base.rconEnabled = $('setRconEnabled').checked;
-    base.rconPort = Number($('setRconPort').value) || 0;
-    base.rconPassword = $('setRconPassword').value;
-    base.arguments = $('setArgs').value;
-    base.extraArguments = $('setExtra').value.trim();
     base.stopCommand = $('setStopCommand').value;
     base.gracefulStopSeconds = Number($('setGraceful').value);
     base.autoRestartDelaySeconds = Number($('setRestartDelay').value);
@@ -4082,6 +4755,41 @@ $('btnSaveSettings').addEventListener('click', async () => {
 });
 
 $('btnReloadSettings').addEventListener('click', loadSettings);
+
+/* -------------------------------------- модалка настроек сервера */
+
+// Карточка «Настройки» на дашборде открывает модалку со всеми полями сервера.
+$('dashSettingsOpen')?.addEventListener('click', openServerSettingsModal);
+$('srvSetX')?.addEventListener('click', () => $('serverSettingsModal')?.classList.remove('open'));
+$('srvSetCancel')?.addEventListener('click', () => $('serverSettingsModal')?.classList.remove('open'));
+$('serverSettingsModal')?.addEventListener('click', (event) => {
+    if (event.target.id === 'serverSettingsModal') $('serverSettingsModal').classList.remove('open');
+});
+
+$('srvSetSave')?.addEventListener('click', async () => {
+    const button = $('srvSetSave');
+    button.disabled = true;
+    button.textContent = 'Сохранение…';
+    try {
+        await saveAllSettings();
+        $('serverSettingsModal')?.classList.remove('open');
+    } catch (error) {
+        toast('Не удалось сохранить', error.message, 'error', 8000);
+    } finally {
+        button.disabled = false;
+        button.textContent = 'Сохранить';
+    }
+});
+
+/** Открывает модалку настроек сервера, подтянув актуальные значения. */
+async function openServerSettingsModal() {
+    const modal = $('serverSettingsModal');
+    if (!modal) return;
+
+    setText('srvSetSub', currentServer()?.name ?? '');
+    await loadSettings();
+    modal.classList.add('open');
+}
 
 // Кнопки «Обзор…» в настройках сервера.
 $('btnBrowseBaseDir')?.addEventListener('click', () => FolderPicker.open('setBaseDir'));
@@ -4364,6 +5072,9 @@ async function runInit() {
 
     $('btnNewServer')?.addEventListener('click', openServerCreate);
     $('btnWelcomeAdd')?.addEventListener('click', openServerCreate);
+
+    // Пилюля выбранного сервера ведёт к списку серверов.
+    $('srvPill')?.addEventListener('click', () => showView('servers'));
 
     initBlueprintPanZoom();
 

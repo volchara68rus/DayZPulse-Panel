@@ -155,16 +155,101 @@ body.app{display:flex;overflow:hidden;height:100vh}
   height:62px;flex:0 0 62px;border-bottom:1px solid var(--line);
   display:flex;align-items:center;gap:12px;padding:0 22px;
   background:linear-gradient(180deg,#121922,#0e141b);
+  flex-wrap:nowrap;overflow:visible;
 }
 .topbar h1{font-size:17px;font-weight:700;white-space:nowrap}
 .topbar .crumb{color:var(--txt-3);font-weight:500;white-space:nowrap;font-size:13px}
 .topbar .spacer{flex:1}
 .topbar .menu-btn{display:none}
 
+/* Кнопки управления сервером в шапке не переносятся на вторую строку —
+   иначе они вылезают за фиксированную высоту шапки. */
+.topbar #headControls{flex-wrap:nowrap;flex:0 0 auto}
+
+/* Узкий экран: состояние и управление прячутся в одну кнопку-меню. */
+.head-more{display:none;gap:7px}
+.head-more .dot{flex:0 0 7px;width:7px;height:7px}
+.head-more .head-more-text{
+  max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.head-more .caret{font-size:10px;opacity:.7}
+
+/* Пилюля выбранного сервера в шапке: видно, какой сервер открыт. */
+.srv-pill{
+  display:inline-flex;align-items:center;gap:8px;padding:6px 12px;cursor:pointer;
+  border:1px solid var(--line);border-radius:99px;background:#161e27;color:var(--txt);
+  font-size:13px;font-weight:700;font-family:inherit;white-space:nowrap;
+  max-width:260px;transition:.15s;flex:0 0 auto;
+}
+.srv-pill:hover{border-color:var(--line-2);background:#1c2632}
+.srv-pill .sdot{flex:0 0 9px}
+.srv-pill-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Пилюля сервера важнее подзаголовка раздела — на средних экранах
+   убираем подзаголовок, чтобы шапка не переполнялась. */
+.topbar.has-srv-pill .crumb{display:none}
+
+/* Автоперезапуск в шапке: компактный значок с подсказкой (title).
+   Цвет меняется по состоянию: выключен — серый, взведён — янтарный. */
+.head-icon{
+  position:relative;display:inline-flex;align-items:center;justify-content:center;
+  width:34px;height:34px;flex:0 0 34px;padding:0;border-radius:9px;cursor:pointer;
+  border:1px solid var(--line);background:#161e27;color:var(--txt-3);
+  font-size:16px;line-height:1;transition:.15s;
+}
+.head-icon:hover{background:#1c2632;border-color:var(--line-2);color:var(--txt)}
+.head-icon.warn{color:var(--amber);border-color:#4a3c1a;background:#2c2410}
+.head-icon.warn .head-icon-ic{animation:spin 2.4s linear infinite}
+.head-icon.hot{border-color:var(--line-2)}
+.head-icon .head-icon-badge{
+  position:absolute;top:-5px;right:-5px;min-width:16px;height:16px;padding:0 4px;
+  border-radius:99px;background:var(--amber);color:#1a1200;font-size:10px;font-weight:800;
+  display:grid;place-items:center;line-height:1;
+}
+.head-icon .head-icon-badge.hidden{display:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+
 .content{flex:1;overflow-y:auto;padding:22px;scroll-behavior:smooth}
 .view{display:none}
 .view.active{display:block;animation:fade .25s ease}
 @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+/* Меню «Состояние и управление»: fixed, чтобы не обрезалось шапкой.
+   Позицию задаёт JS. */
+.head-menu{
+  position:fixed;z-index:130;min-width:236px;
+  background:linear-gradient(180deg,#161f28,#111820);border:1px solid var(--line);
+  border-radius:12px;padding:12px;box-shadow:0 24px 54px -20px #000;
+  display:flex;flex-direction:column;gap:10px;
+}
+.head-menu.hidden{display:none}
+.head-menu-head{display:flex;gap:8px;flex-wrap:wrap}
+.head-menu-actions{display:flex;gap:8px;flex-wrap:wrap}
+.head-menu-actions .btn{flex:1;justify-content:center}
+.head-menu-item{
+  padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:#0f171f;
+  color:var(--txt-2);font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;text-align:left;
+  transition:.15s;
+}
+.head-menu-item:hover{background:#1e2833;color:var(--txt);border-color:var(--line-2)}
+.head-menu-item.hidden{display:none}
+.head-menu-item.active{border-color:#4a3c1a;background:#2c2410;color:var(--amber)}
+.head-menu-item .hm-ic{display:inline-block;margin-right:7px}
+
+/* Подсветка поля, к которому ведёт значок автоперезапуска. */
+.flash{animation:flashHighlight 2.4s ease-out}
+@keyframes flashHighlight{
+  0%,25%{box-shadow:0 0 0 3px #d9a94a55;border-radius:9px;background:#2c241055}
+  100%{box-shadow:0 0 0 3px #d9a94a00;border-radius:9px;background:transparent}
+}
+
+/* Компактный режим шапки. Класс ставит JS, когда содержимое перестаёт
+   помещаться (а не по фиксированной ширине — иначе кнопки обрезались). */
+.topbar.head-compact .admins-btn,
+.topbar.head-compact #statePill,
+.topbar.head-compact #pidPill,
+.topbar.head-compact #autoRestartBtn,
+.topbar.head-compact #headControls{display:none}
+.topbar.head-compact .head-more{display:inline-flex}
 
 /* ===================== КАРТОЧКИ-СТАТИСТИКА ===================== */
 .stat{display:flex;flex-direction:column;gap:4px}
@@ -208,13 +293,16 @@ body.app{display:flex;overflow:hidden;height:100vh}
 /* Пока в панели нет ни одного сервера, элементы состояния в шапке не нужны. */
 .topbar.no-servers #statePill,
 .topbar.no-servers #pidPill,
+.topbar.no-servers #autoRestartBtn,
+.topbar.no-servers #headMoreBtn,
 .topbar.no-servers #btnQuickRestart{display:none}
 
 /* На общей вкладке «Все серверы» состояние, игроки и перезапуск относятся
    к конкретному серверу, поэтому в шапке они не показываются. */
 .topbar.all-servers #statePill,
 .topbar.all-servers #pidPill,
-.topbar.all-servers #autoRestartTag,
+.topbar.all-servers #headMoreBtn,
+.topbar.all-servers #autoRestartBtn,
 .topbar.all-servers #btnQuickRestart{display:none}
 
 .serverlist{
@@ -1029,15 +1117,23 @@ input.locked, input[readonly].locked{
 
 /* ===================== КАРТОЧКА ИГРОКА (модальное окно) ===================== */
 
-.pm-modal{max-width:1080px;width:100%}
-.pm-modal .mhead{gap:10px}
+.pm-modal{max-width:820px;width:100%}
+.pm-modal .mhead{gap:11px}
 .pm-avatar{
   width:36px;height:36px;border-radius:10px;display:grid;place-items:center;font-size:18px;
   background:linear-gradient(160deg,#1d2a38,#131c26);border:1px solid var(--line);flex:0 0 36px;
 }
+.pm-head-text{display:flex;flex-direction:column;min-width:0;line-height:1.25}
 .pm-modal .mhead b{font-size:16px}
-/* Бейдж статуса — сразу после ника/идентификатора; кнопка закрытия сама
-   прижимается вправо (margin-left:auto из темы), поэтому больше ничего не тянем. */
+/* Ссылка на профиль Steam вместо отдельной строки SteamID64. */
+.pm-steam{
+  display:inline-flex;align-items:center;gap:5px;text-decoration:none;
+  color:var(--txt-3);font-size:12px;width:max-content;max-width:100%;
+}
+.pm-steam .mono{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pm-steam:hover{color:#79b8ff}
+.pm-steam-ic{font-size:11px;opacity:.9}
+.pm-steam.disabled{pointer-events:none;opacity:.6}
 .pm-modal .mhead #playerModalStateTag{margin-left:2px}
 
 /* быстрые действия в шапке */
@@ -1047,13 +1143,72 @@ input.locked, input[readonly].locked{
 }
 .pm-actions .btn{white-space:nowrap}
 
-.pm-body{display:grid;grid-template-columns:1fr 1fr;gap:22px;align-items:start}
+.pm-body{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start}
 .pm-col{min-width:0;display:flex;flex-direction:column}
 .pm-h{
   font-size:12.5px;color:var(--txt-2);text-transform:uppercase;letter-spacing:.5px;
   margin:18px 0 10px;font-weight:800;
 }
 .pm-h:first-child{margin-top:0}
+
+/* Компактные факты в виде плиток вместо длинного списка ключ-значение. */
+.pm-facts{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+
+/* Модалка настроек сервера: прокрутка внутри, кнопка удаления слева. */
+.srvset-modal{max-width:760px;width:100%}
+.srvset-modal .mbody{display:flex;flex-direction:column;gap:16px}
+
+/* Образец цвета в сводках: кружок + подпись. */
+.color-swatch-row{display:inline-flex;align-items:center;gap:8px;min-width:0}
+.color-swatch{
+  width:16px;height:16px;flex:0 0 16px;border-radius:5px;
+  border:1px solid #ffffff22;box-shadow:0 0 0 1px #0006 inset;
+}
+
+/* ===================== ЗАМЕТКИ АДМИНОВ ===================== */
+
+/* Карточка «Заметки» на странице «Все серверы». */
+.notes-card{position:relative}
+.notes-head{display:flex;align-items:center;gap:8px}
+.notes-badge{
+  min-width:20px;height:20px;padding:0 6px;border-radius:99px;
+  background:var(--amber);color:#1a1200;font-size:11.5px;font-weight:800;
+  display:grid;place-items:center;line-height:1;
+}
+.notes-badge.hidden{display:none}
+.notes-card .v{margin:6px 0 10px}
+.notes-card .btn{width:100%;justify-content:center}
+
+.notes-modal{max-width:640px;width:100%}
+.notes-list{
+  display:flex;flex-direction:column;gap:8px;margin-top:14px;
+  max-height:46vh;overflow-y:auto;
+}
+.note-row{
+  border:1px solid var(--line);border-radius:10px;padding:10px 12px;
+  background:#0f161d;
+}
+.note-row.unread{border-color:var(--amber);background:#1a1608}
+.note-head{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.note-head b{font-size:12.5px}
+.note-new{
+  font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;
+  color:#1a1200;background:var(--amber);border-radius:99px;padding:1px 7px;
+}
+.note-tools{margin-left:auto;display:inline-flex;align-items:center;gap:4px}
+.note-readers{cursor:help;opacity:.7;font-size:13px}
+.note-del{
+  background:none;border:none;cursor:pointer;color:var(--txt-3);
+  font-size:16px;line-height:1;padding:0 4px;border-radius:6px;
+}
+.note-del:hover{background:#2a1517;color:var(--red)}
+.note-text{font-size:12.5px;color:var(--txt-2);white-space:pre-wrap;word-break:break-word}
+.pm-fact{
+  display:flex;flex-direction:column;gap:2px;min-width:0;
+  padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:#0f161d;
+}
+.pm-fact .k{color:var(--txt-3);font-size:11px;text-transform:uppercase;letter-spacing:.4px;font-weight:700}
+.pm-fact b{font-size:13.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* Последние события игрока в карточке. */
 .pm-events{
@@ -1068,9 +1223,14 @@ input.locked, input[readonly].locked{
 .pm-event-ic{flex:0 0 auto;font-size:13px}
 .pm-event-text{flex:1;color:var(--txt-2);word-break:break-word}
 .pm-event-time{flex:0 0 auto;font-size:11px}
-.pm-inv-col{
-  position:sticky;top:0;
+
+/* ===================== ИНВЕНТАРЬ ИГРОКА (отдельное окно) ===================== */
+
+.pm-inv-modal{max-width:1000px;width:100%}
+.pm-inv-toolbar{
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px;
 }
+.pm-inv-toolbar .spacer{flex:1}
 
 /* ---- визуальный инвентарь ---- */
 
@@ -1246,8 +1406,12 @@ input.locked, input[readonly].locked{
 /* строка онлайн-игрока открывает карточку по клику */
 .table tbody tr.clickable-row{cursor:pointer}
 
+/* Кликабельный SteamID64 в таблицах игроков. */
+.steam-link{color:inherit;text-decoration:none;border-bottom:1px dashed #4a5b6e00}
+.steam-link:hover{color:#79b8ff;border-bottom-color:#79b8ff}
+
 @media(max-width:980px){
   .pm-body{grid-template-columns:1fr}
-  .pm-inv-col{position:static}
+  .pm-facts{grid-template-columns:1fr}
 }
 

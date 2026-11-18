@@ -191,6 +191,7 @@ public static class ApiEndpoints
             {
                 if (request.Arguments is not null) profile.Server.Arguments = request.Arguments.Trim();
                 if (request.ExtraArguments is not null) profile.Server.ExtraArguments = request.ExtraArguments.Trim();
+                if (request.Port is > 0) profile.Server.Port = request.Port.Value;
             });
 
             registry.Sync();
@@ -402,12 +403,20 @@ public static class ApiEndpoints
 
         // --------------------------------------------------------------- система
 
-        api.MapGet("/system/info", (ServerRegistry registry, ConsoleHub hub) => Results.Ok(new
+        api.MapGet("/system/info", (ServerRegistry registry, ConsoleHub hub, SettingsStore settings,
+            DayZPulse.Web.WebUiUpdateService webUi) => Results.Ok(new
         {
             host = SystemInfo.Snapshot(),
             servers = registry.Summary(),
             consoleClients = hub.ClientCount,
             version = typeof(ApiEndpoints).Assembly.GetName().Version?.ToString(),
+            webUi = new
+            {
+                version = webUi.EffectiveVersion,
+                updatedAt = settings.Current.WebUi.UpdatedAt,
+                autoCheck = settings.Current.WebUi.AutoCheck,
+                overridden = webUi.HasOverride
+            },
             paths = new
             {
                 home = AppPaths.BaseDirectory,
@@ -482,6 +491,171 @@ public static class ApiEndpoints
         });
 
         api.MapGet("/audit", (AuditLog audit, int? lines) => Results.Ok(new { lines = audit.ReadTail(lines ?? 200) }));
+
+        // ------------------------------------------------------- заметки админов
+
+        // Список заметок. Каждый админ видит все; отдаём и статус прочтения.
+        api.MapGet("/notes", (SettingsStore settings, SessionTokens tokens, HttpContext ctx) =>
+        {
+            var user = CurrentUser(settings, tokens, ctx);
+
+            var notes = settings.Current.Notes
+                .OrderByDescending(n => n.CreatedAt)
+                .Select(n => new
+                {
+                    n.Id,
+                    n.Author,
+                    n.Text,
+                    n.CreatedAt,
+                    readBy = n.Reads.Select(r => r.User).ToArray(),
+                    read = n.Reads.Any(r => string.Equals(r.User, user, StringComparison.OrdinalIgnoreCase)),
+                    unread = !n.Reads.Any(r => string.Equals(r.User, user, StringComparison.OrdinalIgnoreCase))
+                })
+                .ToArray();
+
+            return Results.Ok(new
+            {
+                user,
+                unread = notes.Count(n => n.unread),
+                notes
+            });
+        });
+
+        // Новая заметка.
+        api.MapPost("/notes", (NoteRequest request, SettingsStore settings, SessionTokens tokens,
+            AuditLog audit, HttpContext ctx) =>
+        {
+            var text = (request.Text ?? "").Trim();
+            if (text.Length == 0)
+            {
+                return Results.BadRequest(new { error = "Текст заметки пуст." });
+            }
+
+            if (text.Length > 2000)
+            {
+                text = text[..2000];
+            }
+
+            var user = CurrentUser(settings, tokens, ctx);
+
+            var note = new PanelNote
+            {
+                Id = Guid.NewGuid().ToString("n")[..12],
+                Author = user,
+                Text = text,
+                CreatedAt = DateTimeOffset.Now,
+
+                // Автор сразу считается прочитавшим.
+                Reads = [new NoteRead { User = user, At = DateTimeOffset.Now }]
+            };
+
+            settings.Update(s =>
+            {
+                s.Notes.Insert(0, note);
+
+                // Держим разумный предел: старые заметки убираем.
+                while (s.Notes.Count > 500)
+                {
+                    s.Notes.RemoveAt(s.Notes.Count - 1);
+                }
+            });
+
+            audit.Write(user, "note.create", note.Id, null);
+            return Results.Ok(new { ok = true, id = note.Id });
+        });
+
+        // Отметить все заметки прочитанными текущим пользователем.
+        api.MapPost("/notes/read", (SettingsStore settings, SessionTokens tokens, HttpContext ctx) =>
+        {
+            var user = CurrentUser(settings, tokens, ctx);
+
+            settings.Update(s =>
+            {
+                foreach (var note in s.Notes)
+                {
+                    if (!note.Reads.Any(r => string.Equals(r.User, user, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        note.Reads.Add(new NoteRead { User = user, At = DateTimeOffset.Now });
+                    }
+                }
+            });
+
+            return Results.Ok(new { ok = true });
+        });
+
+        // Удаление заметки.
+        api.MapDelete("/notes/{id}", (string id, SettingsStore settings, SessionTokens tokens,
+            AuditLog audit, HttpContext ctx) =>
+        {
+            var user = CurrentUser(settings, tokens, ctx);
+            var removed = settings.Current.Notes.Any(n => n.Id == id);
+
+            if (removed)
+            {
+                settings.Update(s => s.Notes.RemoveAll(n => n.Id == id));
+                audit.Write(user, "note.delete", id, null);
+            }
+
+            return Results.Ok(new { ok = removed });
+        });
+
+        // ------------------------------------------- веб-часть (обновление отдельно)
+
+        // Состояние веб-части: локальная и удалённая версии.
+        api.MapGet("/web-ui", async (DayZPulse.Web.WebUiUpdateService webUi, SettingsStore settings,
+            CancellationToken ct) =>
+        {
+            var manifest = await webUi.FetchManifestAsync(ct);
+
+            return Results.Ok(new
+            {
+                baseUrl = webUi.BaseUrl,
+                localVersion = webUi.EffectiveVersion,
+                overridden = webUi.HasOverride,
+                localUpdatedAt = settings.Current.WebUi.UpdatedAt,
+                autoCheck = settings.Current.WebUi.AutoCheck,
+                remoteVersion = manifest?.Version,
+                remoteUpdated = manifest?.Updated,
+                remoteSize = manifest?.Size,
+                available = manifest is not null,
+                upToDate = manifest is not null && manifest.UpToDate,
+                busy = webUi.Busy,
+                progress = webUi.Percent,
+                phase = webUi.Phase
+            });
+        });
+
+        // Скачивание и установка веб-части.
+        api.MapPost("/web-ui/install", async (DayZPulse.Web.WebUiUpdateService webUi,
+            AuditLog audit, HttpContext ctx) =>
+        {
+            var result = await webUi.InstallAsync(ctx.RequestAborted);
+
+            if (!result.Success)
+            {
+                return Results.BadRequest(new { error = result.Error ?? "Не удалось обновить веб-часть." });
+            }
+
+            audit.Write(Actor(ctx), "webui.install", "версия " + (result.Version ?? "?"), null);
+            return Results.Ok(new { ok = true, version = result.Version });
+        });
+
+        // Откат к встроенной веб-части (удаление обновлённой копии).
+        api.MapDelete("/web-ui", (DayZPulse.Web.WebUiUpdateService webUi, AuditLog audit, HttpContext ctx) =>
+        {
+            webUi.Reset();
+            audit.Write(Actor(ctx), "webui.reset", null, null);
+            return Results.Ok(new { ok = true });
+        });
+
+        // Включение/выключение автоматической проверки веб-части.
+        api.MapPut("/web-ui/autocheck", (WebUiAutoCheckRequest request, SettingsStore settings,
+            AuditLog audit, HttpContext ctx) =>
+        {
+            settings.Update(s => s.WebUi.AutoCheck = request.Enabled);
+            audit.Write(Actor(ctx), "webui.autocheck", request.Enabled ? "вкл" : "выкл", null);
+            return Results.Ok(new { ok = true, enabled = request.Enabled });
+        });
 
         // Выбор папки системным диалогом. Нужен и при первом запуске, и в настройках.
         api.MapPost("/system/pick-folder", (PickFolderRequest? request) =>
@@ -816,8 +990,6 @@ public static class ApiEndpoints
             return Results.Ok(new { ok = true });
         });
 
-        // ------------------------------------------------------- администраторы
-
         // Список администраторов (владелец видит и правит). Пароли не отдаём.
         app.MapGet("/api/admins", (SettingsStore settings, SessionTokens tokens, HttpContext ctx) =>
         {
@@ -987,6 +1159,20 @@ public static class ApiEndpoints
         }
 
         return user.Length > 0 && string.Equals(user, ownerName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Имя текущего пользователя: владелец, админ или «владелец» при выключенной авторизации.</summary>
+    private static string CurrentUser(SettingsStore settings, SessionTokens tokens, HttpContext ctx)
+    {
+        var auth = settings.Current.Auth;
+        var user = tokens.Validate(ctx.Request.Cookies[AuthenticationMiddleware.CookieName]) ?? "";
+
+        if (user.Length > 0)
+        {
+            return user;
+        }
+
+        return auth.OwnerName ?? auth.Username ?? "владелец";
     }
 
     // ---------------------------------------------------------------- хелперы
@@ -1188,14 +1374,16 @@ public static class ApiEndpoints
         string? Username, string? Password, bool AllSections, List<string>? Sections,
         bool AllServers, List<string>? Servers);
 
-    public sealed record LaunchUpdateRequest(string? Arguments, string? ExtraArguments);
+    public sealed record LaunchUpdateRequest(string? Arguments, string? ExtraArguments, int? Port);
 
     public sealed record AdminUpdateRequest(
         string? Password, bool? Enabled, bool? AllSections, List<string>? Sections,
         bool? AllServers, List<string>? Servers);
     public sealed record AutostartRequest(bool Enabled);
+    public sealed record NoteRequest(string? Text);
     public sealed record PickFolderRequest(string? Path, string? Title);
     public sealed record MakeDirRequest(string? Parent, string? Name);
+    public sealed record WebUiAutoCheckRequest(bool Enabled);
     public sealed record OwnerSetupRequest(string? Username, string? Password, string? PasswordConfirm,
         string? ServerDirectory, int? WebPort);
 }
