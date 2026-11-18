@@ -507,7 +507,6 @@ function openServerCreate(prefillDirectory) {
     $('serverModalTitle').textContent = 'Новый сервер DayZ';
     $('fName').value = '';
     $('fPort').value = nextFreePort();
-    $('fMap').value = 'chernarusplus';
     $('fColor').value = '#3fb950';
     $('serverModalError').classList.add('hidden');
 
@@ -556,12 +555,6 @@ function nextFreePort() {
     return 2302;
 }
 
-/** Название миссии по выбранной карте (template= в serverDZ.cfg не меняем — только подсказка). */
-const MAP_LABELS = {
-    chernarusplus: 'Chernarus+', enoch: 'Livonia', sakhal: 'Sakhal',
-    namalsk: 'Namalsk', takistan: 'Takistan', custom: 'Другая'
-};
-
 async function saveServerModal() {
     const error = $('serverModalError');
     error.classList.add('hidden');
@@ -593,8 +586,7 @@ async function saveServerModal() {
                 name,
                 directory,
                 port,
-                color: $('fColor').value,
-                map: $('fMap').value
+                color: $('fColor').value
             }
         });
 
@@ -2663,6 +2655,25 @@ function renderQuick() {
         element.disabled = !quickEditable;
     }
 
+    // Селект миссии: список папок mpmissions + текущая (даже если её нет в списке).
+    const mission = $('qcMission');
+    if (mission) {
+        const current = quickValue('server', '__mission') || '';
+        const options = quickMissions.slice();
+        if (current && !options.includes(current)) options.unshift(current);
+
+        mission.textContent = '';
+        for (const name of options) {
+            const option = document.createElement('option');
+            option.value = name;
+            option.textContent = name;
+            mission.appendChild(option);
+        }
+
+        mission.value = current;
+        mission.disabled = !quickEditable;
+    }
+
     // Тумблер «Читать cfggameplay.json» — значение из serverDZ.cfg.
     const enableGameplay = $(GAMEPLAY_FILE_TOGGLE);
     if (enableGameplay) {
@@ -2867,6 +2878,15 @@ function findCardField(elementId) {
 
 function onCardInput(event) {
     const input = event.target;
+
+    // Селект миссии в карточке «Сервер».
+    if (input instanceof HTMLSelectElement) {
+        if (input.id === 'qcMission') {
+            setQuickValue('server', '__mission', input.value);
+        }
+        return;
+    }
+
     if (!(input instanceof HTMLInputElement)) return;
 
     // Тумблер «Читать cfggameplay.json» пишется в serverDZ.cfg (раздел server).
@@ -2939,9 +2959,11 @@ function fieldsFor(section) {
         // Флаг enableCfgGameplayFile теперь живёт в карточке «Мир».
         fields = fields.filter((f) => f.key !== 'enableCfgGameplayFile');
 
+        // Миссия перенесена в главную карточку «Сервер».
+        fields = fields.filter((f) => f.key !== '__mission');
+
         // RCON хранится в профиле панели, а не в serverDZ.cfg.
         fields.push(
-            { key: '__mission', label: 'Миссия (карта)', desc: 'Папка миссии в mpmissions. Меняйте только если добавили новую карту.', kind: 'Select', group: 'Миссия', options: quickMissions.map((m) => m + '|' + m) },
             { key: '__rconEnabled', label: 'Включить RCON', desc: 'Живая консоль и команды из панели. Требует перезапуска сервера.', kind: 'Bool', group: 'RCON панели' },
             { key: '__rconPort', label: 'Порт RCON', desc: 'Порт для RCON. Пусто — берётся порт игры + 4.', kind: 'Int', min: 1, max: 65535, group: 'RCON панели' }
         );

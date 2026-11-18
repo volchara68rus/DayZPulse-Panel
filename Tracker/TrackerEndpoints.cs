@@ -877,6 +877,7 @@ public static class TrackerEndpoints
             ServerRegistry registry, DayZMapService maps, CancellationToken ct) =>
         {
             var runtime = Require(registry, serverId);
+            var mapKey = ServerRegistry.ResolveMapKey(runtime);
 
             var info = await maps.ResolveAsync(runtime.ServerSettings, runtime.Profile.Map, ct);
             if (info is null)
@@ -884,8 +885,8 @@ public static class TrackerEndpoints
                 return Results.Ok(new
                 {
                     available = false,
-                    map = runtime.Profile.Map,
-                    label = ServerRegistry.MapLabel(runtime.Profile.Map)
+                    map = mapKey,
+                    label = ServerRegistry.MapLabel(mapKey)
                 });
             }
 

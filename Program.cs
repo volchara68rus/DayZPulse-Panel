@@ -70,15 +70,13 @@ internal static class Program
         var configuredPort = options.Port ?? ReadConfiguredPort();
         var remote = InstanceProbe.ProbeAsync(configuredPort).GetAwaiter().GetResult();
 
-        // Служба могла только что стартовать (например, установщик запустил её и
-        // сразу значок трея) — даём ей время подняться, прежде чем решать, что
-        // панели нет, и пытаться поднять свой веб-сервер.
-        if (!remote.Available && InstanceProbe.IsServiceRunning())
-        {
-            remote = InstanceProbe.WaitForAsync(configuredPort, TimeSpan.FromSeconds(20)).GetAwaiter().GetResult();
-        }
+        // Наличие запущенной службы уже означает, что панелью владеет она.
+        // Не ждём её ответа синхронно: после обновления служба поднимается
+        // несколько секунд, и ожидание подвешивало трей. Пульт сам опросит
+        // панель в фоне и покажет статус, как только она ответит.
+        var serviceRunning = InstanceProbe.IsServiceRunning();
 
-        if (remote.Available)
+        if (remote.Available || serviceRunning)
         {
             return RunAsRemoteController(options, remote);
         }

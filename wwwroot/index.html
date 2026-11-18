@@ -305,6 +305,11 @@
               <input type="number" id="qcMaxPlayers" min="1" max="200" data-field="server"></label>
           </div>
 
+          <label class="field" style="margin-bottom:12px"><span>Миссия (карта)</span>
+            <select id="qcMission" data-field="server"></select>
+            <span class="help">Папка миссии в <span class="mono">mpmissions</span>. От неё зависит и живая карта.</span>
+          </label>
+
           <label class="sw-row" style="margin-bottom:12px">
             <span>Включить RCON</span>
             <span class="sw"><input type="checkbox" id="qcRconEnabled" data-field="server"><span></span></span>
@@ -1479,30 +1484,17 @@
           <div class="help">Сервер занимает блок из пяти портов.</div>
         </div>
         <div class="field">
-          <label for="fMap">Карта</label>
-          <select id="fMap">
-            <option value="chernarusplus">Chernarus+</option>
-            <option value="enoch">Livonia</option>
-            <option value="sakhal">Sakhal</option>
-            <option value="namalsk">Namalsk</option>
-            <option value="takistan">Takistan</option>
-            <option value="custom">Другая</option>
+          <label for="fColor">Цвет метки</label>
+          <select id="fColor">
+            <option value="#3fb950">Зелёный</option>
+            <option value="#4a90d9">Синий</option>
+            <option value="#a371f7">Фиолетовый</option>
+            <option value="#d9a94a">Янтарный</option>
+            <option value="#e5534b">Красный</option>
+            <option value="#35b8c4">Бирюзовый</option>
+            <option value="#e06c9f">Розовый</option>
           </select>
-          <div class="help">Подставляется в миссию сервера.</div>
         </div>
-      </div>
-
-      <div class="field">
-        <label for="fColor">Цвет метки</label>
-        <select id="fColor">
-          <option value="#3fb950">Зелёный</option>
-          <option value="#4a90d9">Синий</option>
-          <option value="#a371f7">Фиолетовый</option>
-          <option value="#d9a94a">Янтарный</option>
-          <option value="#e5534b">Красный</option>
-          <option value="#35b8c4">Бирюзовый</option>
-          <option value="#e06c9f">Розовый</option>
-        </select>
       </div>
 
       <div class="auth-alert hidden" id="serverModalError" role="alert"></div>

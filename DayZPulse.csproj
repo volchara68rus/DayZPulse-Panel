@@ -12,9 +12,9 @@
     <Product>DayZPulse</Product>
     <Company>DayZPulse</Company>
     <Description>Панель управления игровым сервером с локальным веб-интерфейсом</Description>
-    <Version>2.0.5</Version>
-    <FileVersion>2.0.5.0</FileVersion>
-    <AssemblyVersion>2.0.5.0</AssemblyVersion>
+    <Version>2.0.6</Version>
+    <FileVersion>2.0.6.0</FileVersion>
+    <AssemblyVersion>2.0.6.0</AssemblyVersion>
     <ApplicationIcon>installer\app.ico</ApplicationIcon>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <InvariantGlobalization>false</InvariantGlobalization>

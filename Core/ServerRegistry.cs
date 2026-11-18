@@ -311,8 +311,8 @@ public sealed class ServerRegistry : BackgroundService
                 id = runtime.Id,
                 name = runtime.Name,
                 color = runtime.Profile.Color,
-                map = runtime.Profile.Map,
-                mapLabel = MapLabel(runtime.Profile.Map),
+                map = ResolveMapKey(runtime),
+                mapLabel = MapLabel(ResolveMapKey(runtime)),
                 enabled = runtime.Profile.Enabled,
                 state = status.State.ToString(),
                 stateText = ApiEndpointsStatusText(status.State),
@@ -367,27 +367,51 @@ public sealed class ServerRegistry : BackgroundService
         _ => state.ToString()
     };
 
-    /// <summary>Человеческое название карты для интерфейса.</summary>
-    public static string MapLabel(string? map) => (map ?? "").ToLowerInvariant() switch
+    /// <summary>
+    /// Карта сервера. Карта больше не выбирается при создании: её определяет
+    /// миссия из serverDZ.cfg (или первая папка в mpmissions), а поле профиля —
+    /// только запасной вариант.
+    /// </summary>
+    public static string ResolveMapKey(ServerRuntime runtime)
     {
-        "chernarusplus" or "chernarus" or "dayzoffline.chernarusplus" => "Chernarus+",
-        "enoch" or "livonia" or "dayzoffline.enoch" => "Livonia",
-        "sakhal" or "sakhalexp" => "Sakhal",
-        "namalsk" => "Namalsk",
-        "takistan" or "takistanplus" => "Takistan",
-        "nasdara" => "Nasdara",
-        "deerisle" or "deerisleexp" => "Deer Isle",
-        "banov" => "Banov",
-        "esseker" => "Esseker",
-        "chiemsee" => "Chiemsee",
-        "valning" => "Valning",
-        "rostow" => "Rostow",
-        "pripyat" or "nhchernobyl" => "Pripyat",
-        "namalskplus" => "Namalsk+",
-        "" => "Chernarus+",
-        // Неизвестная карта: отдаём имя как есть, но с заглавной буквы.
-        _ => map!.Length > 0 ? char.ToUpperInvariant(map![0]) + map![1..] : map!
-    };
+        var mission = QuickConfig.MissionTemplateOr(runtime.ServerSettings);
+        return mission.Length > 0 ? mission : runtime.Profile.Map;
+    }
+
+    /// <summary>Человеческое название карты для интерфейса.</summary>
+    public static string MapLabel(string? map)
+    {
+        // Миссия вида «dayzOffline.chernarusplus» или «dayzOffline.new_world»:
+        // отбрасываем префикс, чтобы не показывать его в интерфейсе.
+        var value = (map ?? "").Trim();
+        if (value.StartsWith("dayzoffline.", StringComparison.OrdinalIgnoreCase))
+        {
+            value = value["dayzoffline.".Length..];
+        }
+
+        return value.ToLowerInvariant() switch
+        {
+            "chernarusplus" or "chernarus" => "Chernarus+",
+            "enoch" or "livonia" => "Livonia",
+            "sakhal" or "sakhalexp" => "Sakhal",
+            "namalsk" => "Namalsk",
+            "takistan" or "takistanplus" => "Takistan",
+            "nasdara" => "Nasdara",
+            "deerisle" or "deerisleexp" => "Deer Isle",
+            "banov" => "Banov",
+            "esseker" => "Esseker",
+            "chiemsee" => "Chiemsee",
+            "valning" => "Valning",
+            "rostow" => "Rostow",
+            "pripyat" or "nhchernobyl" => "Pripyat",
+            "namalskplus" => "Namalsk+",
+            // Служебные миры-заготовки DayZ.
+            "new_world" or "empty" or "test" => "Chernarus+",
+            "" => "Chernarus+",
+            // Неизвестная карта: отдаём имя как есть, но с заглавной буквы.
+            _ => char.ToUpperInvariant(value[0]) + value[1..]
+        };
+    }
 
     /// <summary>Путь к исполняемому файлу сервера; не бросает исключений для интерфейса.</summary>
     private static string? SafeExecutable(ServerSettings options)

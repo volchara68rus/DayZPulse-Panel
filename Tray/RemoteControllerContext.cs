@@ -77,7 +77,9 @@ internal sealed class RemoteControllerContext : ApplicationContext
         _timer.Tick += async (_, _) => await RefreshAsync();
         _timer.Start();
 
-        RefreshAsync().GetAwaiter().GetResult();
+        // Первый опрос — в фоне, без блокировки UI: иначе при поднимающейся
+        // службе трей «зависал» и меню не открывалось.
+        RefreshAsync().ContinueWith(_ => { }, TaskScheduler.Default);
 
         if (!options.NoBrowser)
         {
