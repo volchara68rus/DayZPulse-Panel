@@ -28,6 +28,9 @@ session.key
 *.suo
 .vs/
 
+# ===== Инструкции для агентов (локально) =====
+AGENTS.md
+
 # ===== ОС =====
 Thumbs.db
 desktop.ini
