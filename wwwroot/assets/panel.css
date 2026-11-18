@@ -33,26 +33,32 @@ body.app{display:flex;overflow:hidden;height:100vh}
 }
 
 .nav{display:flex;flex-direction:column;flex:1 1 auto;min-height:0}
-/* Прокручивается только середина меню; «Система» закреплена снизу. */
+/* Прокручивается только середина меню: статическая часть сверху не едет. */
+.nav-static{display:flex;flex-direction:column;gap:3px;flex:0 0 auto;flex-shrink:0}
 .nav-scroll{display:flex;flex-direction:column;gap:3px;flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden}
-.nav-pinned{display:flex;flex-direction:column;gap:3px;flex:0 0 auto;flex-shrink:0;padding-top:6px;border-top:1px solid var(--line);margin-top:6px}
-.nav button{
+.nav button,
+.nav-static button{
   display:flex;align-items:center;gap:11px;width:100%;
   padding:10px 11px;border-radius:var(--radius-s);border:1px solid transparent;
   background:transparent;color:var(--txt-2);font-size:13px;font-weight:600;cursor:pointer;
   transition:.15s;text-align:left;position:relative;
 }
-.nav button:hover{background:#161e27;color:var(--txt)}
-.nav button.active{
+.nav button:hover,
+.nav-static button:hover{background:#161e27;color:var(--txt)}
+.nav button.active,
+.nav-static button.active{
   background:linear-gradient(180deg,#1e2937,#141b23);border-color:var(--line-2);color:var(--txt);
   box-shadow:0 0 0 1px #3fb95022, inset 0 1px 0 #ffffff08;
 }
-.nav button.active::before{
+.nav button.active::before,
+.nav-static button.active::before{
   content:"";position:absolute;left:-1px;top:9px;bottom:9px;width:3px;border-radius:99px;
   background:linear-gradient(180deg,#54d96a,#2a9e3d);box-shadow:0 0 10px -1px var(--acc);
 }
-.nav button .ic{width:18px;text-align:center;font-size:15px;opacity:.95;flex:0 0 18px}
-.nav button .nlabel{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nav button .ic,
+.nav-static button .ic{width:18px;text-align:center;font-size:15px;opacity:.95;flex:0 0 18px}
+.nav button .nlabel,
+.nav-static button .nlabel{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 .userbox{
   margin-top:auto;display:flex;align-items:center;gap:10px;
@@ -66,11 +72,35 @@ body.app{display:flex;overflow:hidden;height:100vh}
 .userbox .u{min-width:0;flex:1}
 .userbox .u span{display:block;font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .userbox .u small{display:block;color:var(--txt-3);font-size:11px;font-weight:600}
-.userbox .logout{
+
+/* Круглые иконки-кнопки в подвале сайдбара (шестерёнка и выход). */
+.ibtn{
   background:none;border:1px solid transparent;color:var(--txt-3);cursor:pointer;
-  font-size:15px;padding:5px 8px;border-radius:8px;transition:.15s;
+  font-size:15px;width:32px;height:32px;flex:0 0 32px;display:grid;place-items:center;
+  border-radius:8px;transition:.15s;
 }
-.userbox .logout:hover{background:#2a1614;color:#ff8a80;border-color:#4a2420}
+.ibtn:hover{background:#1e2833;color:var(--txt)}
+.ibtn.logout:hover{background:#2a1614;color:#ff8a80;border-color:#4a2420}
+
+/* Системное меню (Служба / Настройки / Безопасность).
+   fixed, а не absolute: сайдбар обрезает содержимое (overflow:hidden),
+   поэтому абсолютное меню упиралось в его границу. Позицию задаёт JS. */
+.sysmenu-wrap{flex:0 0 auto}
+.sysmenu{
+  position:fixed;z-index:120;min-width:196px;
+  background:linear-gradient(180deg,#161f28,#111820);border:1px solid var(--line);
+  border-radius:11px;padding:6px;box-shadow:0 22px 50px -18px #000;
+  display:flex;flex-direction:column;gap:2px;
+}
+.sysmenu.hidden{display:none}
+.sysmenu button{
+  display:flex;align-items:center;gap:10px;width:100%;padding:9px 11px;
+  border:1px solid transparent;border-radius:8px;background:transparent;color:var(--txt-2);
+  font-size:13px;font-weight:600;cursor:pointer;text-align:left;transition:.15s;
+}
+.sysmenu button:hover{background:#1e2833;color:var(--txt)}
+.sysmenu button.active{background:#1e2937;border-color:var(--line-2);color:var(--txt)}
+.sysmenu button .ic{width:18px;text-align:center;font-size:14px;flex:0 0 18px;opacity:.95}
 
 /* свёрнутая боковая панель */
 .sidebar.collapsed{width:66px;flex-basis:66px;padding:14px 8px;align-items:center}
@@ -81,19 +111,24 @@ body.app{display:flex;overflow:hidden;height:100vh}
 .sidebar.collapsed .nlabel,
 .sidebar.collapsed .userbox .u{display:none}
 .sidebar.collapsed .nav{width:100%;align-items:center}
-.sidebar.collapsed .nav-scroll,
-.sidebar.collapsed .nav-pinned{width:100%;align-items:center}
-.sidebar.collapsed .nav button{width:46px;height:44px;justify-content:center;padding:0;gap:0;margin:0 auto}
-.sidebar.collapsed .nav button .ic{font-size:19px;width:auto}
-.sidebar.collapsed .nav button.active{
+.sidebar.collapsed .nav-static,
+.sidebar.collapsed .nav-scroll{width:100%;align-items:center}
+.sidebar.collapsed .nav button,
+.sidebar.collapsed .nav-static button{width:46px;height:44px;justify-content:center;padding:0;gap:0;margin:0 auto}
+.sidebar.collapsed .nav button .ic,
+.sidebar.collapsed .nav-static button .ic{font-size:19px;width:auto}
+.sidebar.collapsed .nav button.active,
+.sidebar.collapsed .nav-static button.active{
   background:linear-gradient(180deg,#1e2937,#141b23);
   border-color:var(--line-2);
   box-shadow:0 0 0 1px #3fb95055, 0 0 14px -4px var(--acc), inset 0 1px 0 #ffffff08;
 }
-.sidebar.collapsed .nav button.active .ic{color:#7fe39a}
-.sidebar.collapsed .nav button.active::before{display:none}
-.sidebar.collapsed .userbox{width:100%;justify-content:center;padding:12px 0 0}
-.sidebar.collapsed .logout{display:none}
+.sidebar.collapsed .nav button.active .ic,
+.sidebar.collapsed .nav-static button.active .ic{color:#7fe39a}
+.sidebar.collapsed .nav button.active::before,
+.sidebar.collapsed .nav-static button.active::before{display:none}
+.sidebar.collapsed .userbox{width:100%;flex-direction:column;justify-content:center;gap:8px;padding:12px 0 0}
+.sidebar.collapsed .ibtn.logout{display:none}
 
 .collapse-btn{
   position:fixed;top:20px;z-index:30;transform:translateX(-50%);

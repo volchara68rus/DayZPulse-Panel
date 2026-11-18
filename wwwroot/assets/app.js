@@ -1451,7 +1451,7 @@ function canUseServer(serverId) {
 
 /** Скрывает в меню разделы, недоступные администратору. */
 function applySectionPermissions() {
-    document.querySelectorAll('#nav button[data-view]').forEach((button) => {
+    document.querySelectorAll('#sidebar button[data-view]').forEach((button) => {
         const allowed = canUseSection(button.dataset.view);
         button.classList.toggle('hidden', !allowed);
     });
@@ -1494,7 +1494,7 @@ function showView(name) {
     document.querySelector('.topbar')?.classList.toggle(
         'all-servers', name === 'servers' || servers.length === 0);
 
-    document.querySelectorAll('#nav button').forEach((button) => {
+    document.querySelectorAll('#sidebar button[data-view]').forEach((button) => {
         button.classList.toggle('active', button.dataset.view === name);
         // Заблокированные разделы помечаем, но кликабельными оставляем:
         // так пользователь видит подсказку вместо молчаливого отказа.
@@ -1597,8 +1597,11 @@ $('serverGateDownload')?.addEventListener('click', () => {
 
 $('serverGateServers')?.addEventListener('click', () => showView('servers'));
 
-document.querySelectorAll('#nav button').forEach((button) => {
-    button.addEventListener('click', () => guardNavigation(button.dataset.view));
+document.querySelectorAll('#sidebar button[data-view]').forEach((button) => {
+    button.addEventListener('click', () => {
+        guardNavigation(button.dataset.view);
+        closeSysMenu();
+    });
 });
 
 /** Предупреждает о несохранённых настройках при закрытии вкладки. */
@@ -2266,6 +2269,67 @@ $('btnQuickBroadcast')?.addEventListener('click', () => {
 $('logoutBtn').addEventListener('click', async () => {
     try { await api('/auth/logout', { method: 'POST' }); } catch { /* выходим в любом случае */ }
     window.location.replace('/login.html');
+});
+
+/* ------------------------------------------------ системное меню (шестерёнка) */
+
+const sysMenuBtn = $('sysMenuBtn');
+const sysMenu = $('sysMenu');
+
+function openSysMenu() {
+    if (!sysMenu || !sysMenuBtn) return;
+
+    // Меню position:fixed — кладём его над кнопкой, выравнивая по правому краю.
+    // Так оно не обрезается сайдбаром (у него overflow:hidden).
+    const menuRect = { width: 196 };
+    const btnRect = sysMenuBtn.getBoundingClientRect();
+
+    sysMenu.classList.remove('hidden');
+
+    const height = sysMenu.offsetHeight;
+    let left = btnRect.right - menuRect.width;
+    let top = btnRect.top - height - 8;
+
+    // Не даём выйти за края окна.
+    left = Math.max(8, Math.min(left, window.innerWidth - menuRect.width - 8));
+    if (top < 8) {
+        top = btnRect.bottom + 8;
+    }
+
+    sysMenu.style.left = left + 'px';
+    sysMenu.style.top = top + 'px';
+    sysMenuBtn.setAttribute('aria-expanded', 'true');
+}
+
+function closeSysMenu() {
+    if (!sysMenu) return;
+    sysMenu.classList.add('hidden');
+    sysMenuBtn?.setAttribute('aria-expanded', 'false');
+}
+
+function toggleSysMenu() {
+    if (!sysMenu) return;
+    if (sysMenu.classList.contains('hidden')) openSysMenu();
+    else closeSysMenu();
+}
+
+sysMenuBtn?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    toggleSysMenu();
+});
+
+// При изменении размера окна меню бы сместилось — закрываем.
+window.addEventListener('resize', () => closeSysMenu());
+
+// Клик вне меню и Esc закрывают его.
+document.addEventListener('click', (event) => {
+    if (sysMenu?.classList.contains('hidden')) return;
+    if (event.target.closest('.sysmenu-wrap')) return;
+    closeSysMenu();
+});
+
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeSysMenu();
 });
 
 /* ============================================================ консоль */

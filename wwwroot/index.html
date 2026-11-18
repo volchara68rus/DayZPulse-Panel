@@ -28,13 +28,16 @@
     <span>Мои серверы</span>
     <button class="add" id="btnNewServer" type="button" title="Добавить сервер">+</button>
   </div>
+
+  <!-- Статическая часть группы «Мои серверы»: не прокручивается. -->
+  <div class="nav-static">
+    <button type="button" data-view="servers" class="active" data-tip="Все серверы">
+      <span class="ic">▦</span><span class="nlabel">Все серверы</span></button>
+  </div>
   <div class="serverlist" id="serverList"></div>
 
   <nav class="nav" id="nav">
     <div class="nav-scroll">
-      <button type="button" data-view="servers" class="active" data-tip="Все серверы">
-        <span class="ic">▦</span><span class="nlabel">Все серверы</span></button>
-
       <div class="sidegroup"><span>Панель</span></div>
       <button type="button" data-view="dashboard" data-tip="Дашборд">
         <span class="ic">▤</span><span class="nlabel">Дашборд</span></button>
@@ -64,23 +67,27 @@
       <button type="button" data-view="schedule" data-tip="Расписание">
         <span class="ic">⏱</span><span class="nlabel">Расписание</span></button>
     </div>
-
-    <!-- Система относится только к панели и не прокручивается. -->
-    <div class="nav-pinned">
-      <div class="sidegroup"><span>Система</span></div>
-      <button type="button" data-view="service" data-tip="Служба Windows">
-        <span class="ic">⚑</span><span class="nlabel">Служба</span></button>
-      <button type="button" data-view="settings" data-tip="Настройки">
-        <span class="ic">☰</span><span class="nlabel">Настройки</span></button>
-      <button type="button" data-view="security" data-tip="Безопасность">
-        <span class="ic">⛨</span><span class="nlabel">Безопасность</span></button>
-    </div>
   </nav>
 
-  <div class="userbox" data-tip="Владелец панели">
+  <div class="userbox">
     <div class="av" id="userAvatar">–</div>
     <div class="u"><span id="userLabel">владелец</span><small id="userRole">owner</small></div>
-    <button class="logout" id="logoutBtn" type="button" title="Выйти" aria-label="Выйти">⏻</button>
+
+    <!-- Системные разделы спрятаны под шестерёнку: экономим место в меню. -->
+    <div class="sysmenu-wrap">
+      <button class="ibtn" id="sysMenuBtn" type="button" title="Система" aria-label="Система"
+              aria-haspopup="menu" aria-expanded="false">⚙</button>
+      <div class="sysmenu hidden" id="sysMenu" role="menu">
+        <button type="button" data-view="service" data-tip="Служба Windows" role="menuitem">
+          <span class="ic">⚑</span>Служба Windows</button>
+        <button type="button" data-view="settings" data-tip="Настройки" role="menuitem">
+          <span class="ic">☰</span>Настройки</button>
+        <button type="button" data-view="security" data-tip="Безопасность" role="menuitem">
+          <span class="ic">⛨</span>Безопасность</button>
+      </div>
+    </div>
+
+    <button class="ibtn logout" id="logoutBtn" type="button" title="Выйти" aria-label="Выйти">⏻</button>
   </div>
 </aside>
 
