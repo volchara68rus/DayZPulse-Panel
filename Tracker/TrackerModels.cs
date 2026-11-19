@@ -32,12 +32,6 @@ public sealed class TrackedServerState
     public int Infected { get; set; }
     public int WorldObjects { get; set; }
 
-    /// <summary>Кадров в секунду на сервере (0 — нет данных).</summary>
-    public float Fps { get; set; }
-
-    /// <summary>Средний FPS за период (0 — нет данных).</summary>
-    public float FpsAvg { get; set; }
-
     /// <summary>Средний пинг игроков, мс (0 — нет данных).</summary>
     public int PingAvg { get; set; }
 

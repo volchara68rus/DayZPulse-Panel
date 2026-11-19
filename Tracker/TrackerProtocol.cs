@@ -21,8 +21,6 @@ public static class TrackerProtocol
             state.Vehicles = Int(server, "vehicles");
             state.Infected = Int(server, "infected");
             state.WorldObjects = Int(server, "worldObjects");
-            state.Fps = Float(server, "fps");
-            state.FpsAvg = Float(server, "fpsAvg");
             state.PingAvg = Int(server, "pingAvg");
         }
 

@@ -886,8 +886,6 @@ public static class TrackerEndpoints
 
                 players = online.Count,
                 slots,
-                fps = state?.Fps ?? 0,
-                fpsAvg = state?.FpsAvg ?? 0,
                 pingAvg = pings.Length > 0
                     ? (int)Math.Round(pings.Average())
                     : state?.PingAvg ?? 0,

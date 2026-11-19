@@ -1902,7 +1902,7 @@ function applyStatus(status) {
     setText('dashStartedAt', status.startedAt ? 'с ' + formatTime(status.startedAt) : 'процесс не запущен');
 
     // Сервер остановлен — обнуляем всё, что зависит от процесса и мода,
-    // иначе карточки висели бы с прошлыми значениями (онлайн, FPS).
+    // иначе карточки висели бы с прошлыми значениями (онлайн).
     //
     // Но если трекер на связи (мод шлёт файл, сервер мог быть запущен
     // извне панели), данные живые: их не трогаем.
@@ -1911,9 +1911,6 @@ function applyStatus(status) {
         setText('dashOnline', 0);
         const onlineBar = $('dashOnlineBar');
         if (onlineBar) onlineBar.style.width = '0%';
-        setText('dashFps', '—');
-        fpsHistory = [];
-        drawFpsChart('dashFpsSpark', [], '#4a90d9');
         setPlayerCount(0);
     }
 
@@ -2037,9 +2034,8 @@ async function refreshStatus() {
 
 let hostTotalMemoryBytes = 0;
 let dashboardTimer = null;
-let fpsHistory = [];
 
-/** Загружает данные дашборда: онлайн, FPS, пинг, историю, события. */
+/** Загружает данные дашборда: онлайн, пинг, историю, события. */
 async function loadDashboard() {
     const item = currentServer();
     if (!item) return;
@@ -2063,17 +2059,6 @@ async function loadDashboard() {
             : (data.players > 0 ? 100 : 0);
         const bar = $('dashOnlineBar');
         if (bar) bar.style.width = percent.toFixed(1) + '%';
-
-        // FPS: 0 означает «нет данных» — показываем прочерк.
-        setText('dashFps', data.fps > 0 ? `${Math.round(data.fps)} fps` : '—');
-
-        if (data.fps > 0) {
-            fpsHistory.push(Math.round(data.fps));
-            while (fpsHistory.length > 40) fpsHistory.shift();
-        }
-
-        // График под цвет карточки FPS: плавная линия с заливкой вниз.
-        drawFpsChart('dashFpsSpark', fpsHistory, '#4a90d9');
 
         // Онлайн за 24 часа: график по числу игроков.
         const online = data.online24h ?? [];
@@ -2221,69 +2206,6 @@ function colorName(color) {
     };
 
     return map[(color ?? '').toLowerCase()] ?? (color || 'по умолчанию');
-}
-
-/**
- * График FPS: плавная линия с заливкой вниз, в цвет карточки.
- * Высота 70 — занимает нижнюю часть карточки.
- */
-function drawFpsChart(id, values, color) {
-    const svg = $(id);
-    if (!svg) return;
-
-    svg.innerHTML = '';
-
-    if (!values || values.length < 2) {
-        return;
-    }
-
-    const width = 240;
-    const height = 70;
-    const pad = 8;
-    const max = Math.max(...values, 1);
-    const min = Math.min(...values, 0);
-    const range = max - min || 1;
-
-    const coords = values.map((v, i) => {
-        const x = (i / (values.length - 1)) * width;
-        const y = height - pad - ((v - min) / range) * (height - pad * 2);
-        return [x, y];
-    });
-
-    // Сглаживание: кривые Безье через середины отрезков.
-    let d = `M ${coords[0][0].toFixed(1)} ${coords[0][1].toFixed(1)}`;
-    for (let i = 1; i < coords.length; i++) {
-        const [x0, y0] = coords[i - 1];
-        const [x1, y1] = coords[i];
-        const cx = (x0 + x1) / 2;
-        d += ` C ${cx.toFixed(1)} ${y0.toFixed(1)}, ${cx.toFixed(1)} ${y1.toFixed(1)}, ${x1.toFixed(1)} ${y1.toFixed(1)}`;
-    }
-
-    const areaD = `${d} L ${width} ${height} L 0 ${height} Z`;
-
-    const gradientId = 'fpsGrad-' + id;
-    const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-    defs.innerHTML =
-        `<linearGradient id="${gradientId}" x1="0" y1="0" x2="0" y2="1">` +
-        `<stop offset="0%" stop-color="${color}" stop-opacity=".32"/>` +
-        `<stop offset="100%" stop-color="${color}" stop-opacity="0"/>` +
-        '</linearGradient>';
-
-    const area = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    area.setAttribute('d', areaD);
-    area.setAttribute('fill', `url(#${gradientId})`);
-
-    const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    line.setAttribute('d', d);
-    line.setAttribute('fill', 'none');
-    line.setAttribute('stroke', color);
-    line.setAttribute('stroke-width', '2');
-    line.setAttribute('stroke-linecap', 'round');
-    line.setAttribute('stroke-linejoin', 'round');
-
-    svg.appendChild(defs);
-    svg.appendChild(area);
-    svg.appendChild(line);
 }
 
 /** Мини-график («спарклайн») по массиву чисел. */
@@ -2447,18 +2369,16 @@ function stopDashboard() {
 
 /**
  * Очищает дашборд при переключении сервера: без этого старые значения
- * (онлайн, FPS, история) висели бы, пока не придут данные нового сервера.
+ * (онлайн, история) висели бы, пока не придут данные нового сервера.
  */
 function resetDashboard() {
     stopDashboard();
-    fpsHistory = [];
 
     setText('dashOnline', 0);
     setText('dashSlots', 0);
     const bar = $('dashOnlineBar');
     if (bar) bar.style.width = '0%';
 
-    setText('dashFps', '—');
     setText('dashOnline24', '—');
     setText('dashUptime', '—');
     setText('dashStartedAt', 'с последнего рестарта');
@@ -2470,7 +2390,6 @@ function resetDashboard() {
     // Метрики движка относятся к конкретному серверу — обнуляем.
     renderEngineMetrics(null, false);
 
-    drawFpsChart('dashFpsSpark', [], '#4a90d9');
     drawSpark('dashOnlineSpark', [], '#35b8c4');
     const cpuBar = $('dashCpuBar');
     if (cpuBar) cpuBar.style.width = '0%';

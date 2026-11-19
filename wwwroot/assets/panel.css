@@ -469,9 +469,9 @@ body.app{display:flex;overflow:hidden;height:100vh}
 .nav button.locked .ico{filter:grayscale(.6)}
 
 /* ===================== ДАШБОРД ===================== */
-/* Ряд из 4 карточек одинаковой ширины. */
+/* Ряд из 3 карточек одинаковой ширины. */
 .dash-stats{
-  display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:16px;
+  display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:16px;
 }
 .dash-mid{
   display:grid;grid-template-columns:1.6fr 1fr 1.1fr;gap:16px;margin-bottom:16px;
@@ -482,13 +482,6 @@ body.app{display:flex;overflow:hidden;height:100vh}
 
 .stat .v small{font-size:14px;color:var(--txt-3);font-weight:700}
 .spark{width:100%;height:40px;margin-top:8px;display:block;overflow:visible}
-
-/* FPS: график занимает низ карточки, в цвет карточки. */
-.fps-card{position:relative;overflow:hidden}
-.fps-chart{
-  display:block;width:calc(100% + 32px);height:70px;
-  margin:10px -16px -14px;overflow:visible;
-}
 
 .chart-svg{width:100%;height:110px;display:block}
 .chart-axis{

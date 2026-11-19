@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
@@ -11,10 +11,10 @@
     <AssemblyName>DayZPulse</AssemblyName>
     <Product>DayZPulse</Product>
     <Company>DayZPulse</Company>
-    <Description>Панель управления игровым сервером с локальным веб-интерфейсом</Description>
-    <Version>2.2.2</Version>
-    <FileVersion>2.2.2.0</FileVersion>
-    <AssemblyVersion>2.2.2.0</AssemblyVersion>
+    <Description>РџР°РЅРµР»СЊ СѓРїСЂР°РІР»РµРЅРёСЏ РёРіСЂРѕРІС‹Рј СЃРµСЂРІРµСЂРѕРј СЃ Р»РѕРєР°Р»СЊРЅС‹Рј РІРµР±-РёРЅС‚РµСЂС„РµР№СЃРѕРј</Description>
+    <Version>2.2.3</Version>
+    <FileVersion>2.2.3.0</FileVersion>
+    <AssemblyVersion>2.2.3.0</AssemblyVersion>
     <ApplicationIcon>installer\app.ico</ApplicationIcon>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <InvariantGlobalization>false</InvariantGlobalization>
@@ -31,7 +31,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Инструменты сборки мода (pboobf) и артефакты не входят в панель. -->
+    <!-- РРЅСЃС‚СЂСѓРјРµРЅС‚С‹ СЃР±РѕСЂРєРё РјРѕРґР° (pboobf) Рё Р°СЂС‚РµС„Р°РєС‚С‹ РЅРµ РІС…РѕРґСЏС‚ РІ РїР°РЅРµР»СЊ. -->
     <Compile Remove="tools\**\*.cs" />
     <Content Remove="tools\**\*" />
     <None Remove="tools\**\*" />
@@ -40,13 +40,13 @@
     <None Remove="dist\**\*" />
     <Compile Remove="installer\**\*" />
     <Content Remove="installer\**\*" />
-    <!-- Исходники мода и его примеры не входят в публикацию панели. -->
+    <!-- РСЃС…РѕРґРЅРёРєРё РјРѕРґР° Рё РµРіРѕ РїСЂРёРјРµСЂС‹ РЅРµ РІС…РѕРґСЏС‚ РІ РїСѓР±Р»РёРєР°С†РёСЋ РїР°РЅРµР»Рё. -->
     <Content Remove="mod\**\*" />
     <None Remove="mod\**\*" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Веб-интерфейс должен лежать рядом с исполняемым файлом. -->
+    <!-- Р’РµР±-РёРЅС‚РµСЂС„РµР№СЃ РґРѕР»Р¶РµРЅ Р»РµР¶Р°С‚СЊ СЂСЏРґРѕРј СЃ РёСЃРїРѕР»РЅСЏРµРјС‹Рј С„Р°Р№Р»РѕРј. -->
     <Content Update="wwwroot\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
