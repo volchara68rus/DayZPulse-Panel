@@ -34,6 +34,18 @@ public static class AutostartManager
             ? $"\"{exe}\" --tray --no-browser"
             : $"\"{exe}\"";
 
+        // Пишем одну запись в HKCU и убираем возможную запись HKLM от установщика:
+        // две записи (HKLM + HKCU) запускали бы два значка в трее при входе.
+        try
+        {
+            using var machine = Registry.LocalMachine.OpenSubKey(RunKey, writable: true);
+            machine?.DeleteValue(ValueName, throwOnMissingValue: false);
+        }
+        catch
+        {
+            // Нет прав на HKLM — не критично: останется только запись HKCU.
+        }
+
         using var key = Registry.CurrentUser.CreateSubKey(RunKey, writable: true);
         key.SetValue(ValueName, command);
     }

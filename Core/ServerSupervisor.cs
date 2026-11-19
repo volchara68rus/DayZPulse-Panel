@@ -248,8 +248,8 @@ public sealed class ServerSupervisor
                 _buffer.Clear();
             }
 
-            AddSystemLine($"Запуск: {Quote(executable)} {commandLine}");
-            AddSystemLine($"Рабочий каталог: {workingDirectory}");
+            AddSystemLine($"Запуск: {Quote(executable)} {commandLine}", ownerOnly: true);
+            AddSystemLine($"Рабочий каталог: {workingDirectory}", ownerOnly: true);
 
             Process process;
             try
@@ -292,7 +292,7 @@ public sealed class ServerSupervisor
             }
 
             RaiseStateChanged(ServerState.Starting);
-            AddSystemLine($"Сервер запущен, PID {process.Id}.");
+            AddSystemLine($"Сервер запущен, PID {process.Id}.", ownerOnly: true);
             _logger.LogInformation("[{Server}] Сервер запущен (PID {Pid}) пользователем {Actor}. Команда: {Command}",
                 Name, process.Id, actor, _lastLaunchCommandLine);
 
@@ -455,7 +455,9 @@ public sealed class ServerSupervisor
             return;
         }
 
-        var line = _buffer.Add(stream, data);
+        // Служебные строки Steam/движка содержат SteamID и пути — их не
+        // показываем администраторам с ограниченными правами.
+        var line = _buffer.Add(stream, data, ownerOnly: IsTechnicalOutput(data));
         AppendToLogFile(line);
 
         if (stream == "err" || LooksLikeError(data))
@@ -472,6 +474,16 @@ public sealed class ServerSupervisor
 
         Output?.Invoke(this, new ServerOutputEventArgs(Id, line));
     }
+
+    /// <summary>
+    /// Технические строки движка и Steam (SteamID, breakpad, minidump):
+    /// видны только владельцу панели.
+    /// </summary>
+    private static bool IsTechnicalOutput(string text) =>
+        text.Contains("SteamInternal_", StringComparison.OrdinalIgnoreCase) ||
+        text.Contains("SteamID", StringComparison.OrdinalIgnoreCase) ||
+        text.Contains("breakpad", StringComparison.OrdinalIgnoreCase) ||
+        text.Contains("minidump", StringComparison.OrdinalIgnoreCase);
 
     private static bool LooksLikeError(string text) =>
         text.Contains("error", StringComparison.OrdinalIgnoreCase) ||
@@ -688,9 +700,9 @@ public sealed class ServerSupervisor
 
     public void ClearConsole() => _buffer.Clear();
 
-    private void AddSystemLine(string text)
+    private void AddSystemLine(string text, bool ownerOnly = false)
     {
-        var line = _buffer.Add("sys", text);
+        var line = _buffer.Add("sys", text, ownerOnly);
         AppendToLogFile(line);
         Output?.Invoke(this, new ServerOutputEventArgs(Id, line));
     }

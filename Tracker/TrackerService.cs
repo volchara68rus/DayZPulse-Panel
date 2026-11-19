@@ -138,6 +138,10 @@ public sealed class TrackerService : BackgroundService
         var reader = new ServerSnapshotFileReader(_logger);
         _ = Task.Run(() => SnapshotFileLoopAsync(reader, stoppingToken), stoppingToken);
 
+        // Журнал событий игрока (events.jsonl) читаем там же, раз в секунду:
+        // события из мода сразу попадают в локальную базу SQLite.
+        _ = Task.Run(() => EventLogLoopAsync(stoppingToken), stoppingToken);
+
         while (!stoppingToken.IsCancellationRequested)
         {
             try
@@ -199,6 +203,64 @@ public sealed class TrackerService : BackgroundService
                     _logger.LogDebug(ex, "[{Server}] Не удалось прочитать файл снимка.", runtime.Name);
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// Читает журнал событий игрока (events.jsonl) и пишет новые события в
+    /// локальную базу SQLite. Мод не имеет доступа к базе, поэтому события
+    /// передаются файлом, а панель — владелец данных.
+    /// </summary>
+    private async Task EventLogLoopAsync(CancellationToken stoppingToken)
+    {
+        var reader = new PlayerEventLogReader(_logger);
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
+        var lastPrune = DateTimeOffset.MinValue;
+
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                if (!await timer.WaitForNextTickAsync(stoppingToken))
+                {
+                    break;
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+
+            foreach (var runtime in _registry.All)
+            {
+                try
+                {
+                    if (!runtime.Profile.Tracker.Enabled)
+                    {
+                        continue;
+                    }
+
+                    var database = Database(runtime);
+                    var events = reader.Read(runtime, database);
+                    if (events.Count > 0)
+                    {
+                        database.AddEvents(events);
+                        _lastSave[runtime.Id] = DateTimeOffset.Now;
+                    }
+
+                    // Раз в час чистим события за пределами срока хранения.
+                    if (DateTimeOffset.Now - lastPrune > TimeSpan.FromHours(1))
+                    {
+                        database.PruneEvents(runtime.Profile.Tracker.RetentionDays);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "[{Server}] Не удалось обработать журнал событий.", runtime.Name);
+                }
+            }
+
+            lastPrune = DateTimeOffset.Now;
         }
     }
 

@@ -1,6 +1,12 @@
 namespace DayZPulse.Core;
 
-public sealed record ConsoleLine(long Sequence, DateTimeOffset Timestamp, string Stream, string Text);
+/// <summary>
+/// Строка консоли сервера.
+/// <paramref name="OwnerOnly"/> — строку видит только владелец панели:
+/// туда попадают технические данные (пути, команда запуска, SteamID),
+/// которые администраторам с ограниченными правами знать не нужно.
+/// </summary>
+public sealed record ConsoleLine(long Sequence, DateTimeOffset Timestamp, string Stream, string Text, bool OwnerOnly = false);
 
 /// <summary>Кольцевой буфер последних строк консоли сервера с монотонными номерами.</summary>
 public sealed class ConsoleBuffer
@@ -38,9 +44,9 @@ public sealed class ConsoleBuffer
         }
     }
 
-    public ConsoleLine Add(string stream, string text)
+    public ConsoleLine Add(string stream, string text, bool ownerOnly = false)
     {
-        var line = new ConsoleLine(++_sequence, DateTimeOffset.Now, stream, text);
+        var line = new ConsoleLine(++_sequence, DateTimeOffset.Now, stream, text, ownerOnly);
         lock (_gate)
         {
             while (_lines.Count >= _capacity)
@@ -54,24 +60,27 @@ public sealed class ConsoleBuffer
         return line;
     }
 
-    public IReadOnlyList<ConsoleLine> Snapshot(int maxLines)
+    public IReadOnlyList<ConsoleLine> Snapshot(int maxLines, bool includeOwnerOnly = true)
     {
         lock (_gate)
         {
-            if (maxLines <= 0 || maxLines >= _lines.Count)
-            {
-                return _lines.ToArray();
-            }
+            var source = includeOwnerOnly
+                ? _lines
+                : _lines.Where(l => !l.OwnerOnly);
 
-            return _lines.Skip(_lines.Count - maxLines).ToArray();
+            return maxLines <= 0 ? source.ToArray() : source.TakeLast(maxLines).ToArray();
         }
     }
 
-    public IReadOnlyList<ConsoleLine> Since(long sequence, int maxLines)
+    public IReadOnlyList<ConsoleLine> Since(long sequence, int maxLines, bool includeOwnerOnly = true)
     {
         lock (_gate)
         {
-            var result = _lines.Where(l => l.Sequence > sequence).ToArray();
+            var result = _lines
+                .Where(l => l.Sequence > sequence)
+                .Where(l => includeOwnerOnly || !l.OwnerOnly)
+                .ToArray();
+
             return result.Length <= maxLines ? result : result[^maxLines..];
         }
     }

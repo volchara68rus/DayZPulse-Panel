@@ -103,6 +103,36 @@ public sealed class LiveHub
     private static byte[] Encode(LiveMessage message) =>
         Encoding.UTF8.GetBytes(Json.Serialize(new { type = message.Type, data = message.Data }, indented: false));
 
+    /// <summary>
+    /// Закрывает все соединения (при остановке приложения): хост не должен
+    /// ждать их до таймаута.
+    /// </summary>
+    public void CloseAll(WebSocketCloseStatus status, string reason)
+    {
+        foreach (var (id, socket) in _clients)
+        {
+            _clients.TryRemove(id, out _);
+            Close(socket, status, reason);
+        }
+    }
+
+    /// <summary>Безопасно закрывает сокет, не дожидаясь ответа клиента.</summary>
+    internal static void Close(WebSocket socket, WebSocketCloseStatus status, string reason)
+    {
+        try
+        {
+            if (socket.State is WebSocketState.Open or WebSocketState.CloseReceived)
+            {
+                // Abort: клиент мог уже уйти, ждать подтверждения закрытия нельзя.
+                socket.Abort();
+            }
+        }
+        catch
+        {
+            // Соединение могло закрыться само.
+        }
+    }
+
     /// <summary>Отправляет событие всем подключённым клиентам.</summary>
     public void Broadcast(string type, object payload)
     {

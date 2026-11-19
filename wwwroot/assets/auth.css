@@ -43,6 +43,29 @@
 
 .auth-foot{margin-top:20px;padding-top:16px;border-top:1px solid var(--line);color:var(--txt-3);font-size:11.5px;line-height:1.6}
 
+/* Заглушка на время перезапуска панели: форма сменяется понятным ожиданием. */
+.restart-overlay{
+  position:fixed;inset:0;z-index:200;display:grid;place-items:center;
+  background:#0b0f14ee;backdrop-filter:blur(6px);padding:20px;
+}
+.restart-overlay.hidden{display:none}
+.restart-box{
+  text-align:center;max-width:420px;padding:34px 28px;border-radius:16px;
+  border:1px solid var(--line);background:linear-gradient(180deg,#151d26,#11171e);
+  box-shadow:0 40px 90px -30px #000;
+}
+.restart-box b{display:block;font-size:16px;margin:18px 0 8px}
+.restart-box p{color:var(--txt-2);font-size:13px;line-height:1.6;margin:0}
+.restart-box small{display:block;margin-top:10px;font-size:12px}
+.restart-box .btn{display:inline-flex}
+.restart-box .btn.hidden{display:none}
+.restart-spinner{
+  width:44px;height:44px;margin:0 auto;border-radius:50%;
+  border:3px solid #1d2733;border-top-color:var(--acc);
+  animation:spin .9s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
 /* индикатор надёжности пароля */
 .strength{display:flex;gap:4px;margin-top:8px}
 .strength i{flex:1;height:4px;border-radius:99px;background:#1b2531;transition:.25s}

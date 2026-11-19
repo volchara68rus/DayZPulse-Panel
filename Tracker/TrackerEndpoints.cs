@@ -808,12 +808,60 @@ public static class TrackerEndpoints
         });
 
         api.MapGet("/servers/{serverId}/tracker/players/{id}/events", (string id, string serverId,
-            int? limit, ServerRegistry registry) =>
+            int? limit, ServerRegistry registry, TrackerService tracker) =>
         {
             var runtime = Require(registry, serverId);
+            var take = Math.Clamp(limit ?? 40, 1, 200);
+
+            // Сначала события из базы (их пишет мод через events.jsonl) — они
+            // точнее и свежее. Если по игроку там пусто, добираем из старого
+            // источника (ADM-лог): до обновления мода событий в базе не будет.
+            var stored = tracker.Database(runtime).LoadEvents(1000)
+                .Where(e => string.Equals(e.PlayerId, id, StringComparison.OrdinalIgnoreCase))
+                .Take(take)
+                .Select(e => new { at = e.At, kind = e.Type, text = DescribeEvent(e) })
+                .ToArray();
+
+            if (stored.Length > 0)
+            {
+                return Results.Ok(stored);
+            }
+
             var name = runtime.Tracker.LivePlayer(id)?.Name ?? runtime.Tracker.Player(id)?.Name ?? "";
-            var events = runtime.Tracker.PlayerEvents(id, name, limit ?? 40);
+            var events = runtime.Tracker.PlayerEvents(id, name, take);
             return Results.Ok(events);
+        });
+
+        // Общая лента событий сервера: киллфид, входы/выходы, предметы, постройки.
+        api.MapGet("/servers/{serverId}/tracker/events", (string serverId, string? type, int? limit,
+            ServerRegistry registry, TrackerService tracker) =>
+        {
+            var runtime = Require(registry, serverId);
+            var take = Math.Clamp(limit ?? 200, 1, 1000);
+
+            var events = tracker.Database(runtime).LoadEvents(take);
+
+            if (!string.IsNullOrWhiteSpace(type))
+            {
+                events = events.Where(e => string.Equals(e.Type, type, StringComparison.OrdinalIgnoreCase)).ToArray();
+            }
+
+            return Results.Ok(events.Select(e => new
+            {
+                e.At,
+                e.Type,
+                text = DescribeEvent(e),
+                e.PlayerId,
+                e.PlayerName,
+                e.KillerId,
+                e.KillerName,
+                e.Class,
+                e.Slot,
+                e.Weapon,
+                e.Detail,
+                e.X,
+                e.Z
+            }));
         });
 
         api.MapGet("/servers/{serverId}/tracker/dashboard", (string serverId, ServerRegistry registry,
@@ -1871,6 +1919,36 @@ public static class TrackerEndpoints
 
     private static string Actor(HttpContext ctx) =>
         ctx.Items.TryGetValue("actor", out var value) && value is string actor ? actor : "неизвестно";
+
+    /// <summary>Читаемый текст события игрока для интерфейса.</summary>
+    private static string DescribeEvent(PlayerEventRow e) => e.Type switch
+    {
+        "session_in" => "вошёл в игру",
+        "session_out" => "вышел из игры",
+        // В событии kill игрок строки — жертва, убийца — в KillerName.
+        "kill" => "убит" +
+                  (e.KillerName.Length > 0 ? $" игроком {e.KillerName}" : "") +
+                  (e.Weapon.Length > 0 ? $" ({e.Weapon})" : "") +
+                  (e.Detail.Length > 0 ? $", {e.Detail} м" : ""),
+        "suicide" => "покончил с собой",
+        "env_death" => "погиб" + (e.Detail.Length > 0 ? $" ({e.Detail})" : " (окружение)"),
+        "hit" => "получил урон" +
+                 (e.KillerName.Length > 0 ? $" от {e.KillerName}" : "") +
+                 (e.Weapon.Length > 0 ? $" ({e.Weapon})" : ""),
+        "item_pickup" => $"поднял {e.Class}",
+        "item_drop" => $"выложил {e.Class}",
+        "item_into_hands" => $"взял в руки {e.Class}",
+        "item_out_hands" => $"убрал из рук {e.Class}",
+        "item_attach" => $"надел {e.Class}" + (e.Slot.Length > 0 ? $" ({e.Slot})" : ""),
+        "item_detach" => $"снял {e.Class}" + (e.Slot.Length > 0 ? $" ({e.Slot})" : ""),
+        "item_cargo_in" => $"положил {e.Class}",
+        "item_cargo_out" => $"достал {e.Class}",
+        "build" => $"построил {e.Class}" + (e.Detail.Length > 0 ? $" ({e.Detail})" : ""),
+        "dismantle" => $"разобрал {e.Class}" + (e.Detail.Length > 0 ? $" ({e.Detail})" : ""),
+        "destroy" => $"снёс {e.Class}" + (e.Detail.Length > 0 ? $" ({e.Detail})" : ""),
+        "chat" => e.Detail,
+        _ => e.Type + (e.Class.Length > 0 ? $" {e.Class}" : "")
+    };
 
     public sealed record CommandRequest(string Command);
     public sealed record ConfigSaveRequest(string Path, string? Content);

@@ -108,7 +108,7 @@ public sealed class RconSession : IAsyncDisposable
     }
 
     /// <summary>Отправляет команду серверу через RCON.</summary>
-    public async Task<string> SendAsync(string command, CancellationToken ct)
+    public async Task<string> SendAsync(string command, CancellationToken ct, bool echo = true)
     {
         var client = _client;
         if (client is null || !client.IsConnected)
@@ -116,17 +116,22 @@ public sealed class RconSession : IAsyncDisposable
             throw new InvalidOperationException(LastError ?? "RCON не подключён.");
         }
 
-        // Свою же команду показываем в консоли как отправленную.
-        Append(new RconLine(DateTimeOffset.Now, "> " + command));
+        // Свою же команду показываем в консоли как отправленную. Служебный
+        // автополлинг (например, players для пинга) не показываем — иначе
+        // консоль засоряется одной и той же строкой каждые несколько секунд.
+        if (echo)
+        {
+            Append(new RconLine(DateTimeOffset.Now, "> " + command));
+        }
 
         var response = await client.SendCommandAsync(command, TimeSpan.FromSeconds(8), ct);
         return response;
     }
 
-    /// <summary>Список игроков от RCON-команды players.</summary>
+    /// <summary>Список игроков от RCON-команды players (служебный опрос, без эха).</summary>
     public async Task<IReadOnlyList<RconPlayer>> PlayersAsync(CancellationToken ct)
     {
-        var response = await SendAsync("players", ct);
+        var response = await SendAsync("players", ct, echo: false);
         return RconClient.ParsePlayers(response);
     }
 

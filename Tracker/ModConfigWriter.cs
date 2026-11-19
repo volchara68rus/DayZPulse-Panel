@@ -163,6 +163,12 @@ public static class ModConfigWriter
                 ["ENABLE_INVENTORY"] = true,
                 ["INVENTORY_URL"] = $"{baseUrl}/tracker/inventory",
 
+                // Журнал событий игрока: мод пишет events.jsonl, панель читает
+                // его и складывает в локальную базу SQLite.
+                ["ENABLE_EVENTS"] = true,
+                ["EVENTS_ITEM_MODE"] = "significant",
+                ["EVENTS_MAX_QUEUE"] = 500,
+
                 ["API_TOKEN"] = tracker.ApiToken,
                 ["SERVER_ID"] = string.IsNullOrWhiteSpace(tracker.ServerId) ? profile.Id : tracker.ServerId,
                 ["INCLUDE_PLAIN_ID"] = true,

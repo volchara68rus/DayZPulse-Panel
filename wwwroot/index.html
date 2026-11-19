@@ -949,11 +949,40 @@
         </table>
       </div>
 
-      <div class="card">
+      <div class="card" style="margin-bottom:16px">
         <h2><span class="ic">⚔</span>Килфид</h2>
         <table class="table">
           <thead><tr><th>Время</th><th>Убийца</th><th>Жертва</th><th>Оружие</th><th>Дистанция</th></tr></thead>
           <tbody id="killRows"></tbody>
+        </table>
+      </div>
+
+      <!-- События игроков: вход/выход, предметы, постройки, киллы. -->
+      <div class="card">
+        <div class="qc-head">
+          <h2><span class="ic">📋</span>События игроков</h2>
+          <select id="eventFilter" style="width:auto;margin-left:auto">
+            <option value="">все события</option>
+            <option value="kill">убийства</option>
+            <option value="session_in">входы</option>
+            <option value="session_out">выходы</option>
+            <option value="item_into_hands">предметы в руки</option>
+            <option value="item_attach">экипировка</option>
+            <option value="item_cargo_in">в контейнеры</option>
+            <option value="build">постройки</option>
+            <option value="dismantle">разбор</option>
+            <option value="chat">чат</option>
+          </select>
+          <button class="btn ghost sm" id="eventsRefresh" type="button">Обновить</button>
+        </div>
+        <div class="help" style="margin-bottom:10px">
+          События приходят от мода <span class="mono">@DayZPulse</span> через файл журнала
+          и хранятся в локальной базе. Предметы пишутся выборочно (оружие, медицина,
+          инструменты, экипировка) — настраивается в config.json мода.
+        </div>
+        <table class="table">
+          <thead><tr><th>Время</th><th>Игрок</th><th>Событие</th></tr></thead>
+          <tbody id="eventRows"></tbody>
         </table>
       </div>
     </section>

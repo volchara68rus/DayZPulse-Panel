@@ -48,6 +48,15 @@ public static class AppBootstrap
         builder.Services.AddSingleton<ConsoleBridge>();
         builder.Services.AddSingleton<WebHostLifecycleService>();
         builder.Services.AddSingleton<AppLifecycle>();
+
+        // Остановка не должна ждать закрытия WebSocket-соединений: страница
+        // держит канал событий открытым, и хост по умолчанию висит 30 секунд.
+        // При перезапуске (например, после смены порта) это выглядело как
+        // «зависшая» страница. Гасим быстро, соединения закрываем сами.
+        builder.Services.Configure<HostOptions>(options =>
+        {
+            options.ShutdownTimeout = TimeSpan.FromSeconds(3);
+        });
         builder.Services.AddSingleton<SteamCmdService>();
         builder.Services.AddSingleton<SteamCmdInstaller>();
 
@@ -71,6 +80,7 @@ public static class AppBootstrap
         builder.Services.AddHostedService(sp => sp.GetRequiredService<ConsoleBridge>());
         builder.Services.AddHostedService(sp => sp.GetRequiredService<LivePublisher>());
         builder.Services.AddHostedService(sp => sp.GetRequiredService<WebHostLifecycleService>());
+        builder.Services.AddHostedService<WebSocketShutdownService>();
         builder.Services.AddHostedService(sp => sp.GetRequiredService<TrackerService>());
         builder.Services.AddHostedService(sp => sp.GetRequiredService<RconService>());
         builder.Services.AddHostedService(sp => sp.GetRequiredService<SteamCmdInstaller>());

@@ -131,6 +131,26 @@ public sealed class TrackerDatabase
                 key   TEXT PRIMARY KEY,
                 value TEXT
             );
+
+            CREATE TABLE IF NOT EXISTS events (
+                seq         INTEGER PRIMARY KEY AUTOINCREMENT,
+                at          TEXT NOT NULL,
+                type        TEXT NOT NULL,
+                player_id   TEXT NOT NULL DEFAULT '',
+                player_name TEXT NOT NULL DEFAULT '',
+                killer_id   TEXT NOT NULL DEFAULT '',
+                killer_name TEXT NOT NULL DEFAULT '',
+                class       TEXT NOT NULL DEFAULT '',
+                slot        TEXT NOT NULL DEFAULT '',
+                weapon      TEXT NOT NULL DEFAULT '',
+                detail      TEXT NOT NULL DEFAULT '',
+                x           REAL NOT NULL DEFAULT 0,
+                z           REAL NOT NULL DEFAULT 0,
+                raw         TEXT NOT NULL DEFAULT ''
+            );
+            CREATE INDEX IF NOT EXISTS ix_events_at ON events(at);
+            CREATE INDEX IF NOT EXISTS ix_events_player ON events(player_id, at);
+            CREATE INDEX IF NOT EXISTS ix_events_type ON events(type, at);
             """;
 
         command.ExecuteNonQuery();
@@ -637,6 +657,155 @@ public sealed class TrackerDatabase
 
         // Пустая база (только что создана) — считаем, что данных нет.
         return players.Count == 0 && kills.Count == 0 && violations.Count == 0 ? null : state;
+    }
+
+    // ------------------------------------------------------------- события
+
+    /// <summary>
+    /// Добавляет события игрока, разобранные из журнала мода (events.jsonl).
+    /// Строки только добавляются — прежние не трогаем.
+    /// </summary>
+    public void AddEvents(IReadOnlyList<PlayerEventRow> events)
+    {
+        if (events.Count == 0)
+        {
+            return;
+        }
+
+        using var connection = Open();
+        using var tx = connection.BeginTransaction();
+
+        using var command = connection.CreateCommand();
+        command.Transaction = tx;
+        command.CommandText = """
+            INSERT INTO events
+                (at, type, player_id, player_name, killer_id, killer_name,
+                 class, slot, weapon, detail, x, z, raw)
+            VALUES
+                ($at, $type, $pid, $pn, $kid, $kn, $class, $slot, $weapon, $detail, $x, $z, $raw);
+            """;
+
+        var pAt = command.Parameters.Add("$at", SqliteType.Text);
+        var pType = command.Parameters.Add("$type", SqliteType.Text);
+        var pPid = command.Parameters.Add("$pid", SqliteType.Text);
+        var pPn = command.Parameters.Add("$pn", SqliteType.Text);
+        var pKid = command.Parameters.Add("$kid", SqliteType.Text);
+        var pKn = command.Parameters.Add("$kn", SqliteType.Text);
+        var pClass = command.Parameters.Add("$class", SqliteType.Text);
+        var pSlot = command.Parameters.Add("$slot", SqliteType.Text);
+        var pWeapon = command.Parameters.Add("$weapon", SqliteType.Text);
+        var pDetail = command.Parameters.Add("$detail", SqliteType.Text);
+        var pX = command.Parameters.Add("$x", SqliteType.Real);
+        var pZ = command.Parameters.Add("$z", SqliteType.Real);
+        var pRaw = command.Parameters.Add("$raw", SqliteType.Text);
+
+        foreach (var e in events)
+        {
+            pAt.Value = FormatTime(e.At);
+            pType.Value = e.Type;
+            pPid.Value = e.PlayerId;
+            pPn.Value = e.PlayerName;
+            pKid.Value = e.KillerId ?? "";
+            pKn.Value = e.KillerName ?? "";
+            pClass.Value = e.Class ?? "";
+            pSlot.Value = e.Slot ?? "";
+            pWeapon.Value = e.Weapon ?? "";
+            pDetail.Value = e.Detail ?? "";
+            pX.Value = e.X;
+            pZ.Value = e.Z;
+            pRaw.Value = e.Raw ?? "";
+            command.ExecuteNonQuery();
+        }
+
+        tx.Commit();
+    }
+
+    /// <summary>События игрока за период (новые сверху).</summary>
+    public IReadOnlyList<PlayerEventRow> LoadEvents(int limit)
+    {
+        if (!File.Exists(_path))
+        {
+            return [];
+        }
+
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT at, type, player_id, player_name, killer_id, killer_name,
+                   class, slot, weapon, detail, x, z
+            FROM events ORDER BY seq DESC LIMIT $limit;
+            """;
+        command.Parameters.AddWithValue("$limit", Math.Clamp(limit, 1, 1000));
+
+        var result = new List<PlayerEventRow>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            result.Add(new PlayerEventRow(
+                ParseTime(reader.GetString(0)),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetString(3),
+                reader.GetString(4),
+                reader.GetString(5),
+                reader.GetString(6),
+                reader.GetString(7),
+                reader.GetString(8),
+                reader.GetString(9),
+                reader.GetDouble(10),
+                reader.GetDouble(11),
+                ""));
+        }
+
+        return result;
+    }
+
+    /// <summary>Удаляет старые события (за пределами срока хранения).</summary>
+    public void PruneEvents(int retentionDays)
+    {
+        try
+        {
+            using var connection = Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "DELETE FROM events WHERE at < $cutoff;";
+            command.Parameters.AddWithValue("$cutoff",
+                FormatTime(DateTimeOffset.UtcNow.AddDays(-Math.Clamp(retentionDays, 1, 365))));
+            command.ExecuteNonQuery();
+        }
+        catch
+        {
+            // Чистка не критична.
+        }
+    }
+
+    /// <summary>Читает значение из таблицы meta (для служебных отметок).</summary>
+    public string? GetMeta(string key)
+    {
+        try
+        {
+            using var connection = Open();
+            return GetMeta(connection, key);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Пишет значение в таблицу meta.</summary>
+    public void SetMeta(string key, string value)
+    {
+        try
+        {
+            using var connection = Open();
+            using var transaction = connection.BeginTransaction();
+            SetMeta(connection, transaction, key, value);
+            transaction.Commit();
+        }
+        catch
+        {
+            // Служебная отметка не критична.
+        }
     }
 
     // ------------------------------------------------------------- служебное

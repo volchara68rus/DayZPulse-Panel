@@ -132,6 +132,18 @@
     </div>
   </main>
 </div>
+
+<!-- Заглушка на время перезапуска панели (например, после смены порта). -->
+<div class="restart-overlay hidden" id="restartOverlay">
+  <div class="restart-box" role="status" aria-live="polite">
+    <div class="restart-spinner" aria-hidden="true"></div>
+    <b>Панель перезапускается</b>
+    <p id="restartText">Открываем панель на новом адресе…</p>
+    <small class="muted" id="restartHint">Обычно это занимает несколько секунд.</small>
+    <a class="btn ghost sm hidden" id="restartLink" href="#" style="margin-top:14px">Открыть вручную</a>
+  </div>
+</div>
+
 <!-- ==================== ВЫБОР ПАПКИ ==================== -->
 <div class="overlay" id="folderModal">
   <div class="modal" style="max-width:560px" role="dialog" aria-modal="true" aria-labelledby="folderTitle">

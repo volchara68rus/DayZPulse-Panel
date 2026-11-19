@@ -14,7 +14,7 @@
 ; ------------------------------------------------------------
 
 #ifndef AppVersion
-  #define AppVersion "2.1.3"
+  #define AppVersion "2.2.1"
 #endif
 
 #define AppName "DayZ Pulse"
@@ -125,6 +125,26 @@ Filename: "{code:GetPanelUrl}"; Description: "Открыть панель в б�
 ; Сначала закрываем трей, затем снимаем службу.
 Filename: "{sys}\taskkill.exe"; Parameters: "/f /im {#AppExe}"; Flags: runhidden; RunOnceId: "KillTray"
 Filename: "{app}\{#AppExe}"; Parameters: "uninstall-service"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveService"
+
+[UninstallDelete]
+; Полностью убираем каталог данных панели: настройки, журналы, аудит, SteamCMD
+; и обновлённую веб-часть. Иначе после удаления остаётся ProgramData\DayZPulse
+; с файлами на сотни мегабайт.
+;
+; Каталоги dayzpulse внутри папок серверов DayZ не трогаем: там резервные
+; копии, база игроков и логи сервера — их удаляет сам пользователь.
+Type: filesandordirs; Name: "{commonappdata}\{#DataFolder}"
+
+; В папке установки приложение создаёт подкаталог data, когда Program Files
+; доступен только для чтения и данные ложатся рядом с программой. Без этого
+; правила после удаления оставалась пустая папка {app}\data.
+Type: filesandordirs; Name: "{app}\data"
+Type: filesandordirs; Name: "{app}\wwwroot"
+
+; Убираем и саму папку установки: если после снятия службы и файлов остаются
+; служебные каталоги, Inno оставляет {app}, а вместе с ней — пустую папку
+; в Program Files.
+Type: filesandordirs; Name: "{app}"
 
 [Code]
 var

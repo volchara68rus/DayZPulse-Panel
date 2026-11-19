@@ -91,7 +91,9 @@ public sealed class TrackerStore
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var player in players)
             {
-                if (string.IsNullOrWhiteSpace(player.Id))
+                // Игрок без личности (unknown_N) — пропускаем: такое в базе
+                // только мусорит (id вроде unknown_0 без имени).
+                if (string.IsNullOrWhiteSpace(player.Id) || IsPlaceholderId(player.Id))
                 {
                     continue;
                 }
@@ -650,6 +652,11 @@ public sealed class TrackerStore
         }
     }
 
+    /// <summary>Идентификаторы-заглушки вида unknown_N (игрок без личности).</summary>
+    private static bool IsPlaceholderId(string? id) =>
+        !string.IsNullOrWhiteSpace(id) &&
+        id.StartsWith("unknown", StringComparison.OrdinalIgnoreCase);
+
     public void Import(PersistedState state)
     {
         lock (_gate)
@@ -657,6 +664,13 @@ public sealed class TrackerStore
             _players.Clear();
             foreach (var player in state.Players ?? [])
             {
+                // Записи вида unknown_N копились, когда мод присылал игроков без
+                // личности. Такие данные бесполезны — не переносим их.
+                if (IsPlaceholderId(player.Id))
+                {
+                    continue;
+                }
+
                 _players[player.Id] = player;
             }
 

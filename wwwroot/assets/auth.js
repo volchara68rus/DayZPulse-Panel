@@ -458,10 +458,12 @@ function initSetup() {
 
     /** Ждёт ответа панели на новом порту и открывает её. */
     async function waitForPortThenOpen(target) {
-        // Служба Windows перезапускается не мгновенно: ждём до 3 минут, иначе
-        // пользователь видит «панель не ответила» и решает, что всё сломалось.
-        for (let attempt = 0; attempt < 180; attempt++) {
-            await new Promise((resolve) => setTimeout(resolve, 1000));
+        showRestartOverlay(target);
+
+        // Служба Windows перезапускается не мгновенно, но обычно это 2–5 секунд.
+        // Опрашиваем часто (200 мс), чтобы переход случился сразу после старта.
+        for (let attempt = 0; attempt < 600; attempt++) {
+            await new Promise((resolve) => setTimeout(resolve, 200));
 
             try {
                 const response = await fetch(target + '/api/auth/status', {
@@ -477,8 +479,31 @@ function initSetup() {
             }
         }
 
-        showAlert(errorBox,
-            `Панель не ответила на ${target}. Откройте адрес вручную.`, 'ok');
+        // Дольше обычного — показываем ссылку вместо бесконечного ожидания.
+        const hint = $('restartHint');
+        if (hint) hint.textContent = 'Панель поднимается дольше обычного. Откройте адрес вручную.';
+
+        const link = $('restartLink');
+        if (link) {
+            link.href = target;
+            link.classList.remove('hidden');
+        }
+    }
+
+    /** Показывает заглушку «панель перезапускается» вместо формы. */
+    function showRestartOverlay(target) {
+        const overlay = $('restartOverlay');
+        if (!overlay) return;
+
+        const port = target.split(':').pop();
+        setTextSafe('restartText', `Открываем панель на новом адресе: порт ${port}…`);
+        overlay.classList.remove('hidden');
+    }
+
+    /** Безопасно выставляет текст элемента. */
+    function setTextSafe(id, value) {
+        const element = $(id);
+        if (element) element.textContent = value;
     }
 
     usernameEl?.focus();

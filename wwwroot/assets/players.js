@@ -641,6 +641,27 @@ const Players = (() => {
         await loadInventory(id);
 
         el('playerInvModal')?.classList.add('open');
+
+        // У онлайн-игрока просим свежий снимок у мода: без этого окно
+        // показывало бы пустоту, пока мод сам не пришлёт инвентарь.
+        if (currentPlayerOnline) {
+            requestInventory(id);
+        }
+    }
+
+    /** Просит мод прислать свежий снимок инвентаря, затем перечитывает его. */
+    function requestInventory(id) {
+        App.api(apiPath(`/tracker/inventory/${encodeURIComponent(id)}/refresh`), { method: 'POST' })
+            .then(() => {
+                // Мод отвечает на следующем опросе (до пары секунд).
+                setTimeout(() => {
+                    if (currentPlayerId === id) loadInventory(id);
+                }, 2500);
+                setTimeout(() => {
+                    if (currentPlayerId === id) loadInventory(id);
+                }, 5000);
+            })
+            .catch(() => { /* мод может быть не на связи — просто нет снимка */ });
     }
 
     /* ------------------------------------------------------------ инвентарь */
@@ -1346,6 +1367,60 @@ const Players = (() => {
             }
         } catch (error) {
             App.toast('Килфид недоступен', error.message, 'error');
+        }
+    }
+
+    /* ------------------------------------------------------ события игроков */
+
+    // Значки типов событий для ленты.
+    const EVENT_ICONS = {
+        session_in: '🟢', session_out: '🔴', kill: '⚔', suicide: '☠', env_death: '☠',
+        hit: '💥', item_into_hands: '✋', item_out_hands: '🫳', item_attach: '🧥',
+        item_detach: '🧦', item_cargo_in: '📥', item_cargo_out: '📤',
+        build: '🏗', dismantle: '🔧', destroy: '💣', chat: '💬'
+    };
+
+    /** Лента событий игроков из базы (их пишет мод через events.jsonl). */
+    async function loadEvents() {
+        const body = el('eventRows');
+        if (!body) return;
+
+        const filter = el('eventFilter')?.value ?? '';
+
+        try {
+            const query = filter ? `?type=${encodeURIComponent(filter)}&limit=300` : '?limit=300';
+            const events = await App.api(apiPath('/tracker/events' + query));
+            clear(body);
+
+            if (!events.length) {
+                const tr = document.createElement('tr');
+                const td = cell('Событий пока нет. Они появятся, когда мод пришлёт журнал.', 'muted');
+                td.colSpan = 3;
+                tr.appendChild(td);
+                body.appendChild(tr);
+                return;
+            }
+
+            for (const event of events) {
+                const tr = document.createElement('tr');
+
+                tr.appendChild(cell(new Date(event.at).toLocaleTimeString('ru-RU'), 'mono'));
+
+                const who = document.createElement('td');
+                who.textContent = event.playerName || event.playerId || '—';
+                tr.appendChild(who);
+
+                const what = document.createElement('td');
+                const icon = document.createElement('span');
+                icon.textContent = (EVENT_ICONS[event.type] ?? '•') + ' ';
+                what.appendChild(icon);
+                what.appendChild(document.createTextNode(event.text ?? ''));
+                tr.appendChild(what);
+
+                body.appendChild(tr);
+            }
+        } catch (error) {
+            App.toast('События недоступны', error.message, 'error');
         }
     }
 
@@ -2263,6 +2338,8 @@ const Players = (() => {
         el('dbExport')?.addEventListener('click', exportCsv);
         el('violationFilter')?.addEventListener('change', loadViolations);
         el('violationsRefresh')?.addEventListener('click', loadViolations);
+        el('eventsRefresh')?.addEventListener('click', loadEvents);
+        el('eventFilter')?.addEventListener('change', loadEvents);
         el('commandsRefresh')?.addEventListener('click', loadCommands);
         el('commandsClear')?.addEventListener('click', () => {
             UI.confirm('Удалить всю очередь команд?', async () => {
@@ -2326,7 +2403,7 @@ const Players = (() => {
 
     return {
         start, stop, bind, reset, reloadMap, loadConfig, loadLive, loadDatabase,
-        loadChat, loadViolations, loadKills, loadCommands,
+        loadChat, loadViolations, loadKills, loadCommands, loadEvents,
 
         // Общие помощники для визуального редактора наборов (loadouts.js).
         livePlayers: () => livePlayers,

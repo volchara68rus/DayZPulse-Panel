@@ -306,7 +306,10 @@ public sealed partial class AdminLogService
         RegexOptions.IgnoreCase)]
     private static partial Regex SuicidePattern();
 
-    [GeneratedRegex(@"^Player\s+""([^""]*)""\s*\(id=([^\s)]*)[^)]*\)\s+died",
+    // Смерть игрока. В логе бывает пометка "(DEAD)" между именем и id:
+    //   Player "Name" (id=...) died. Stats> ...
+    //   Player "Name" (DEAD) (id=...) died. Stats> ...
+    [GeneratedRegex(@"^Player\s+""([^""]*)""(?:\s*\(DEAD\))?\s*\(id=([^\s)]*)[^)]*\)\s+died",
         RegexOptions.IgnoreCase)]
     private static partial Regex DeathPattern();
 

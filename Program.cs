@@ -66,6 +66,18 @@ internal static class Program
 
         AppPaths.Initialize(options.DataDirectory);
 
+        // Один значок в трее на пользователя. Мьютекс берём до выбора режима:
+        // и трей с собственной панелью, и трей-пульт (когда панелью владеет
+        // служба) не должны запускаться по второму разу — иначе в трее
+        // появлялось два одинаковых значка.
+        using var mutex = new Mutex(true, MutexName, out var firstInstance);
+        if (!firstInstance)
+        {
+            WriteError(new InvalidOperationException(
+                "DayZPulse уже запущен. Закройте его через значок в трее."));
+            return 2;
+        }
+
         // Если панель уже поднята службой или другим экземпляром — работаем как пульт.
         var configuredPort = options.Port ?? ReadConfiguredPort();
         var remote = InstanceProbe.ProbeAsync(configuredPort).GetAwaiter().GetResult();
@@ -79,14 +91,6 @@ internal static class Program
         if (remote.Available || serviceRunning)
         {
             return RunAsRemoteController(options, remote);
-        }
-
-        using var mutex = new Mutex(true, MutexName, out var firstInstance);
-        if (!firstInstance)
-        {
-            WriteError(new InvalidOperationException(
-                "DayZPulse уже запущен. Закройте его через значок в трее."));
-            return 2;
         }
 
         return RunAsTrayApplication(options);

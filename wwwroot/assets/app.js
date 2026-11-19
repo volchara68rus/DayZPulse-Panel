@@ -704,7 +704,7 @@ function refreshCurrentView() {
         case 'players': if (typeof Players !== 'undefined') { Players.loadConfig(); Players.loadLive(); Players.loadDatabase(); } break;
         case 'livemap': if (typeof Players !== 'undefined') { Players.reset(); Players.start(); } break;
         case 'chat': Players?.loadChat(); break;
-        case 'anticheat': Players?.loadViolations(); Players?.loadKills(); break;
+        case 'anticheat': Players?.loadViolations(); Players?.loadKills(); Players?.loadEvents(); break;
     }
 }
 
@@ -1114,7 +1114,7 @@ function loadCurrentView() {
     if (name === 'players') { Players.start(); Players.loadConfig(); Players.loadDatabase(); if (typeof Loadouts !== 'undefined') Loadouts.load(); }
     if (name === 'livemap') { Players.start(); Players.loadLive(); }
     if (name === 'chat') { Players.start(); Players.loadChat(); }
-    if (name === 'anticheat') { Players.loadViolations(); Players.loadKills(); }
+    if (name === 'anticheat') { Players.loadViolations(); Players.loadKills(); Players.loadEvents(); }
 }
 
 /**
@@ -1894,13 +1894,20 @@ function applyStatus(status) {
 
     setText('statState', status.stateText);
 
+    // Игроки онлайн приходят в статусе сервера: обновляем счётчик в шапке
+    // сразу, не дожидаясь захода на вкладку «Игроки».
+    setPlayerCount(status.players ?? 0);
+
     setText('dashUptime', formatDuration(status.uptimeSeconds));
     setText('dashStartedAt', status.startedAt ? 'с ' + formatTime(status.startedAt) : 'процесс не запущен');
     setText('dashCpuVal', (status.cpuPercent ?? 0).toFixed(0) + '%');
 
     // Сервер остановлен — обнуляем всё, что зависит от процесса и мода,
-    // иначе карточки висели бы с прошлыми значениями (онлайн, FPS, пинг).
-    const stopped = !status.running;
+    // иначе карточки висели бы с прошлыми значениями (онлайн, FPS).
+    //
+    // Но если трекер на связи (мод шлёт файл, сервер мог быть запущен
+    // извне панели), данные живые: их не трогаем.
+    const stopped = !status.running && !status.trackerConnected;
     if (stopped) {
         setText('dashOnline', 0);
         const onlineBar = $('dashOnlineBar');
@@ -1980,25 +1987,23 @@ function applyStatus(status) {
     if (typeof syncHeadMenu === 'function') syncHeadMenu();
 
     setText('serverDirLabel', status.workingDirectory || 'C:\\DayZServer');
-
-    // Бейдж игроков обновляется службой трекера отдельно.
-    const badge = $('playersBadge');
-    if (badge && lastPlayerCount !== null) {
-        badge.textContent = String(lastPlayerCount);
-        badge.classList.toggle('hot', lastPlayerCount > 0);
-    }
 }
 
-/** Сколько игроков онлайн — заполняется разделом «Игроки». */
+/** Сколько игроков онлайн — обновляет бейдж в меню и счётчик в шапке. */
 let lastPlayerCount = null;
 
 function setPlayerCount(value) {
     lastPlayerCount = Number(value) || 0;
+
     const badge = $('playersBadge');
     if (badge) {
         badge.textContent = String(lastPlayerCount);
         badge.classList.toggle('hot', lastPlayerCount > 0);
     }
+
+    // Счётчик «Игроков» в шапке: обновляем тем же значением, чтобы он не
+    // висел нулём до захода на вкладку «Игроки».
+    setText('statPlayersOnline', lastPlayerCount);
 }
 
 async function refreshStatus() {
