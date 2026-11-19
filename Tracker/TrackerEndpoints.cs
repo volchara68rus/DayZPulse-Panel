@@ -969,7 +969,7 @@ public static class TrackerEndpoints
             {
                 available = true,
                 map = info.Key,
-                tilev = info.Tilev,
+                tilev = info.TilevKey,
                 label = ServerRegistry.MapLabel(info.Key),
                 size = info.Size,
                 maxZoom = 8,
@@ -997,7 +997,7 @@ public static class TrackerEndpoints
             // Адрес не должен подменять карту: иначе можно было бы подсунуть
             // один набор тайлов под именем другого.
             if (!string.Equals(map, info.Key, StringComparison.OrdinalIgnoreCase) ||
-                !string.Equals(tilev, info.Tilev, StringComparison.OrdinalIgnoreCase))
+                !string.Equals(tilev, info.TilevKey, StringComparison.OrdinalIgnoreCase))
             {
                 return Results.NotFound();
             }

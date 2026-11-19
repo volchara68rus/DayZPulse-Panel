@@ -10,8 +10,26 @@ public sealed record MapInfo(
     string Key,
     int Size,
     string Tiles,
-    string Tilev,
-    string Format);
+    string TilevTopographic,
+    string TilevSatellite,
+    string Format)
+{
+    /// <summary>
+    /// Версия тайлов для слоя. У новых карт xam.nu версии слоёв различаются:
+    /// в конфигурации <c>tilev</c> приходит массивом [топографический, спутник].
+    /// </summary>
+    public string TilevFor(string layer) =>
+        layer == "satellite" ? TilevSatellite : TilevTopographic;
+
+    /// <summary>
+    /// Ключ версии для адреса тайла: в него входят обе версии, чтобы смена
+    /// любой из них сбрасывала кэш браузера.
+    /// </summary>
+    public string TilevKey =>
+        string.Equals(TilevTopographic, TilevSatellite, StringComparison.Ordinal)
+            ? TilevTopographic
+            : TilevTopographic + "-" + TilevSatellite;
+}
 
 /// <summary>
 /// Карта DayZ для «живой карты»: тайлы и метаданные берём с dayz.xam.nu,
@@ -150,7 +168,7 @@ public sealed class DayZMapService
             return null;
         }
 
-        var url = $"{StaticRoot}/dayz/maps/{info.Tiles}/{info.Tilev}/{layer}/{z}/{x}/{y}.{info.Format}";
+        var url = $"{StaticRoot}/dayz/maps/{info.Tiles}/{info.TilevFor(layer)}/{layer}/{z}/{x}/{y}.{info.Format}";
 
         lock (_tileLock)
         {
@@ -214,17 +232,20 @@ public sealed class DayZMapService
                     continue;
                 }
 
-                var tiles = info.TryGetProperty("tiles", out var t) ? t.GetString() : key;
-                var tilev = info.TryGetProperty("tilev", out var tv) ? tv.GetString() : null;
-                var format = info.TryGetProperty("format", out var f) ? f.GetString() : "webp";
+                var tiles = ReadString(info, "tiles") ?? key;
+                var format = ReadString(info, "format") ?? "webp";
                 var size = info.TryGetProperty("size", out var s) && s.TryGetInt32(out var sz) ? sz : 15360;
 
-                if (string.IsNullOrEmpty(tiles) || string.IsNullOrEmpty(tilev))
+                // tilev у старых карт — строка, у новых — массив [топо, спутник].
+                // Если массив короче, недостающую версию берём из первой.
+                var (tilevTopo, tilevSat) = ReadTileVersions(info);
+
+                if (string.IsNullOrEmpty(tilevTopo) || string.IsNullOrEmpty(tilevSat))
                 {
                     continue;
                 }
 
-                return new MapInfo(key, size, tiles!, tilev!, string.IsNullOrEmpty(format) ? "webp" : format!);
+                return new MapInfo(key, size, tiles, tilevTopo!, tilevSat!, format);
             }
             catch (JsonException ex)
             {
@@ -234,6 +255,52 @@ public sealed class DayZMapService
 
         _logger.LogWarning("Не удалось получить карту {Key} с xam.nu", key);
         return null;
+    }
+
+    /// <summary>Читает строковое поле, не падая на массиве/числе.</summary>
+    private static string? ReadString(JsonElement parent, string name)
+    {
+        if (!parent.TryGetProperty(name, out var value))
+        {
+            return null;
+        }
+
+        return value.ValueKind switch
+        {
+            JsonValueKind.String => value.GetString(),
+            JsonValueKind.Number => value.ToString(),
+            _ => null
+        };
+    }
+
+    /// <summary>
+    /// Версии тайлов по слоям. В новых конфигурациях xam.nu <c>tilev</c> —
+    /// массив [топографический, спутник]; в старых — одна строка на оба слоя.
+    /// </summary>
+    private static (string? Topographic, string? Satellite) ReadTileVersions(JsonElement info)
+    {
+        if (!info.TryGetProperty("tilev", out var value))
+        {
+            return (null, null);
+        }
+
+        if (value.ValueKind == JsonValueKind.Array)
+        {
+            var items = value.EnumerateArray()
+                .Select(e => e.ValueKind == JsonValueKind.String ? e.GetString() : null)
+                .Where(s => !string.IsNullOrEmpty(s))
+                .ToArray();
+
+            return items.Length switch
+            {
+                0 => (null, null),
+                1 => (items[0], items[0]),
+                _ => (items[0], items[1])
+            };
+        }
+
+        var single = value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+        return (single, single);
     }
 
     private async Task<IReadOnlyDictionary<string, MapVersion>?> GetVersionsAsync(CancellationToken ct)
