@@ -18,18 +18,23 @@ public sealed class TrackerService : BackgroundService
     private readonly Dictionary<string, DateTimeOffset> _lastSave = new(StringComparer.OrdinalIgnoreCase);
 
     public TrackerService(SettingsStore settings, ServerRegistry registry, ModManager mods,
-        ILogger<TrackerService> logger)
+        EngineMetricsService engineMetrics, ILogger<TrackerService> logger)
     {
         _settings = settings;
         _registry = registry;
         _mods = mods;
+        _engineMetrics = engineMetrics;
         _logger = logger;
     }
 
     private readonly ModManager _mods;
+    private readonly EngineMetricsService _engineMetrics;
 
     public SettingsStore Settings => _settings;
     public ServerRegistry Registry => _registry;
+
+    /// <summary>Метрики движка (аналог #monitor): FPS, память, игроки, зомби, животные.</summary>
+    public EngineMetrics? EngineMetrics(string serverId) => _engineMetrics.Latest(serverId);
 
     /// <summary>
     /// Читает maxPlayers из serverDZ.cfg сервера (число слотов).
@@ -201,6 +206,17 @@ public sealed class TrackerService : BackgroundService
                 catch (Exception ex)
                 {
                     _logger.LogDebug(ex, "[{Server}] Не удалось прочитать файл снимка.", runtime.Name);
+                }
+
+                // Метрики движка (аналог #monitor) читаем из RPT там же: это
+                // независимый от мода источник FPS, памяти и числа сущностей.
+                try
+                {
+                    _engineMetrics.Poll(runtime.Profile, runtime.Id);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "[{Server}] Не удалось прочитать метрики движка.", runtime.Name);
                 }
             }
         }

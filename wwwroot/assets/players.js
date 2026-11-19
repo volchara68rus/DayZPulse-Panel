@@ -17,6 +17,14 @@ const Players = (() => {
     let databaseFilter = { search: '', watchOnly: false, sort: 'lastSeen' };
     let currentPlayerId = null;
     let currentPlayerOnline = false;
+    // Игрок, чья карточка сейчас открыта (для живой подгрузки событий).
+    let currentCardId = null;
+    // Номер последнего запроса событий: применяем только ответ на самый свежий,
+    // иначе устаревший ответ мог бы перерисовать список поверх нового.
+    let eventsReqSeq = 0;
+    // Отпечаток отрисованного списка. null = список ещё не рисовали,
+    // поэтому пустой список тоже должен отрисоваться (заглушкой).
+    let eventsSignature = null;
 
     /* ------------------------------------------------------------ утилиты */
 
@@ -189,6 +197,7 @@ const Players = (() => {
 
             text('ovPlayersOnline', onlineCount);
             text('statPlayersOnline', onlineCount);
+            text('statPlayersOnlineCard', onlineCount);
             text('statPlayersTotal', livePlayers.length);
             text('acPlayers', livePlayers.length);
             App.setPlayerCount(onlineCount);
@@ -204,6 +213,13 @@ const Players = (() => {
             renderLive();
             renderPlayerPickers();
             updateLiveMap();
+
+            // Карточка игрока открыта — обновляем её «Последние события» на
+            // лету, иначе они появлялись бы только после повторного открытия.
+            const card = el('playerModal');
+            if (currentCardId && card?.classList.contains('open')) {
+                renderPlayerEvents(currentCardId);
+            }
         } catch (error) {
             text('playersConnection', 'ошибка: ' + error.message);
         }
@@ -509,6 +525,10 @@ const Players = (() => {
             const record = data.record ?? {};
             const name = live?.name || record.name || id;
 
+            currentCardId = id;
+            // Новый игрок — прошлый список событий не наш.
+            eventsSignature = null;
+
             text('playerModalName', name);
 
             // Ссылка на профиль Steam: у онлайн-игрока — из мода, иначе из базы.
@@ -670,7 +690,7 @@ const Players = (() => {
     // визуально не привязаны к зонам тела.
     const SLOT_LAYOUT = {
         left: [
-            ['Mask', 'Маска', '😷'], ['Eyewear', 'Очки', '🕶'], ['Neck', 'Шея', '🧣']
+            ['Mask', 'Маска', '😷'], ['Eyewear', 'Очки', '🕶'], ['Armband', 'Нарукавник', '🎗']
         ],
         right: [
             ['Back', 'Рюкзак', '🎒'], ['Gloves', 'Перчатки', '🧤']
@@ -678,8 +698,9 @@ const Players = (() => {
     };
 
     // Зоны силуэта: формируют «стоящего человечка».
+    // Ключи — это имена слотов движка (Slot_<key>), а не человеческие подписи.
     const BODY_ROWS = [
-        ['Head', 'Голова', 'head'], ['Body', 'Торс', 'torso'], ['Vest', 'Жилет', 'vest'],
+        ['Headgear', 'Голова', 'head'], ['Body', 'Торс', 'torso'], ['Vest', 'Жилет', 'vest'],
         ['Hips', 'Пояс', 'hips'], ['Legs', 'Ноги', 'legs'], ['Feet', 'Стопы', 'feet']
     ];
 
@@ -709,8 +730,11 @@ const Players = (() => {
     let catalogLoaded = false;
 
     // Человеческие названия групп (для подписей категорий).
+    // Ключи — это либо группа предмета (Head, Body, …), либо имя слота
+    // движка (Headgear, Armband, …): обе используются для подписей в UI.
     const GROUP_LABELS = {
-        Head: 'Головные уборы', Mask: 'Маски', Eyewear: 'Очки', Neck: 'Шея',
+        Head: 'Головные уборы', Headgear: 'Головные уборы', Mask: 'Маски',
+        Eyewear: 'Очки', Neck: 'Шея', Armband: 'Нарукавники',
         Vest: 'Разгрузки и бронежилеты', Body: 'Верхняя одежда', Back: 'Рюкзаки',
         Hips: 'Пояса', Legs: 'Штаны', Feet: 'Обувь', Gloves: 'Перчатки',
         Weapon: 'Оружие', Ammo: 'Патроны и магазины', WeaponParts: 'Обвес оружия',
@@ -719,9 +743,10 @@ const Players = (() => {
         VehicleObj: 'Транспорт', Animal: 'Животные', Explosive: 'Взрывчатка', Other: 'Прочее'
     };
 
-    // Какие группы предметов допустимы в каждом слоте экипировки.
+    // Какие ГРУППЫ предметов допустимы в каждом СЛОТЕ экипировки
+    // (ключи — имена слотов движка).
     const SLOT_GROUPS = {
-        Head: ['Head'], Mask: ['Mask', 'Gear'], Eyewear: ['Eyewear'], Neck: ['Gear'],
+        Headgear: ['Head'], Mask: ['Mask'], Eyewear: ['Eyewear'], Armband: ['Gear'],
         Vest: ['Vest'], Body: ['Body'], Back: ['Back'], Hips: ['Gear', 'Hips'],
         Legs: ['Legs'], Feet: ['Feet'], Gloves: ['Gloves']
     };
@@ -1288,46 +1313,73 @@ const Players = (() => {
     async function renderPlayerEvents(id) {
         const box = el('playerModalEvents');
         if (!box) return;
-        clear(box);
+
+        // Не перерисовываем список, пока идёт предыдущий запрос: без этого
+        // модалка «дёргалась» бы каждые пару секунд (список на миг исчезал).
+        const myReq = ++eventsReqSeq;
 
         try {
             const events = await App.api(apiPath(`/tracker/players/${encodeURIComponent(id)}/events?limit=40`));
+
+            // Карточку сменили/закрыли или пришёл ответ более свежего запроса.
+            if (currentCardId !== id || myReq !== eventsReqSeq) {
+                return;
+            }
+
+            // Отпечаток содержимого: если список не изменился, DOM не трогаем —
+            // иначе браузер каждый раз перерисовывал бы одинаковый список.
+            const signature = events
+                .map((e) => `${e.at}|${e.kind}|${e.text}`)
+                .join('\n');
+
+            if (signature === eventsSignature) {
+                return;
+            }
+
+            eventsSignature = signature;
+
+            const rows = document.createDocumentFragment();
+
             if (!events.length) {
                 const hint = document.createElement('span');
                 hint.className = 'muted';
                 hint.textContent = 'Событий пока нет (киллы и чат читаются из админ-лога).';
-                box.appendChild(hint);
-                return;
+                rows.appendChild(hint);
+            } else {
+                const icons = { death: '☠', kill: '🎯', chat: '💬' };
+
+                for (const event of events) {
+                    const row = document.createElement('div');
+                    row.className = 'pm-event';
+
+                    const ic = document.createElement('span');
+                    ic.className = 'pm-event-ic';
+                    ic.textContent = icons[event.kind] ?? '•';
+
+                    const textNode = document.createElement('span');
+                    textNode.className = 'pm-event-text';
+                    textNode.textContent = event.text;
+
+                    const time = document.createElement('span');
+                    time.className = 'pm-event-time mono muted';
+                    time.textContent = fmtTime(event.at);
+
+                    row.appendChild(ic);
+                    row.appendChild(textNode);
+                    row.appendChild(time);
+                    rows.appendChild(row);
+                }
             }
 
-            const icons = { death: '☠', kill: '🎯', chat: '💬' };
-
-            for (const event of events) {
-                const row = document.createElement('div');
-                row.className = 'pm-event';
-
-                const ic = document.createElement('span');
-                ic.className = 'pm-event-ic';
-                ic.textContent = icons[event.kind] ?? '•';
-
-                const textNode = document.createElement('span');
-                textNode.className = 'pm-event-text';
-                textNode.textContent = event.text;
-
-                const time = document.createElement('span');
-                time.className = 'pm-event-time mono muted';
-                time.textContent = fmtTime(event.at);
-
-                row.appendChild(ic);
-                row.appendChild(textNode);
-                row.appendChild(time);
-                box.appendChild(row);
-            }
+            // Заменяем содержимое одним движением, после получения данных.
+            box.replaceChildren(rows);
         } catch (error) {
+            if (currentCardId !== id || myReq !== eventsReqSeq) return;
+
             const hint = document.createElement('span');
             hint.className = 'muted';
             hint.textContent = 'Не удалось получить события: ' + error.message;
-            box.appendChild(hint);
+            box.replaceChildren(hint);
         }
     }
 
@@ -2260,6 +2312,13 @@ const Players = (() => {
         App.toast('Экспорт готов', `${databaseRows.length} записей сохранено в CSV.`, 'info');
     }
 
+    /** Закрывает карточку игрока и перестаёт обновлять её события. */
+    function closePlayerCard() {
+        currentCardId = null;
+        eventsSignature = null;
+        el('playerModal')?.classList.remove('open');
+    }
+
     /* -------------------------------------------------------------- публично */
 
     function start() {
@@ -2357,9 +2416,9 @@ const Players = (() => {
             if (event.key === 'Enter') { event.preventDefault(); broadcast(el('chatInput').value); }
         });
 
-        el('playerModalClose')?.addEventListener('click', () => el('playerModal').classList.remove('open'));
+        el('playerModalClose')?.addEventListener('click', closePlayerCard);
         el('playerModal')?.addEventListener('click', (event) => {
-            if (event.target.id === 'playerModal') el('playerModal').classList.remove('open');
+            if (event.target.id === 'playerModal') closePlayerCard();
         });
 
         el('playerInvClose')?.addEventListener('click', () => el('playerInvModal').classList.remove('open'));

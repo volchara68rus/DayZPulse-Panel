@@ -37,11 +37,23 @@ const Loadouts = (() => {
             className: i.className || '',
             quantity: Number(i.quantity) > 0 ? Number(i.quantity) : 1,
             health: typeof i.health === 'number' ? i.health : 1,
-            slot: i.slot || '',
+            slot: normalizeSlot(i.slot),
             target: i.target || 'Cargo',
             attachments: Array.isArray(i.attachments) ? i.attachments.slice() : []
         })) : [];
         return loadout;
+    }
+
+    /**
+     * Приводит имя слота к имени, которое понимает движок (Slot_<name>).
+     * В ранних версиях головной слот назывался «Head», а вместо «Armband»
+     * был несуществующий «Neck» — такие наборы чиним на лету.
+     */
+    function normalizeSlot(slot) {
+        const s = (slot || '').trim();
+        if (s === 'Head') return 'Headgear';
+        if (s === 'Neck') return 'Armband';
+        return s;
     }
 
     /** Считает предметы набора. */

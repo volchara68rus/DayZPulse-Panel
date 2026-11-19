@@ -474,7 +474,7 @@ body.app{display:flex;overflow:hidden;height:100vh}
   display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:16px;
 }
 .dash-mid{
-  display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:16px;
+  display:grid;grid-template-columns:1.6fr 1fr 1.1fr;gap:16px;margin-bottom:16px;
 }
 .dash-bottom{
   display:grid;grid-template-columns:1.4fr 1fr;gap:16px;
@@ -1214,6 +1214,9 @@ input.locked, input[readonly].locked{
 .pm-events{
   display:flex;flex-direction:column;gap:2px;max-height:220px;overflow-y:auto;
   border:1px solid var(--line);border-radius:10px;background:#0b1117;padding:6px;
+  /* Постоянная минимальная высота: пока список грузится/обновляется, блок не
+     схлопывается — иначе карточка «дёргалась» бы по высоте. */
+  min-height:96px;
 }
 .pm-event{
   display:flex;align-items:baseline;gap:8px;padding:5px 7px;border-radius:7px;

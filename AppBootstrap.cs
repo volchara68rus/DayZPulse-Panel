@@ -70,6 +70,7 @@ public static class AppBootstrap
         builder.Services.AddSingleton<PanelModService>();
         builder.Services.AddSingleton<ServerLogService>();
         builder.Services.AddSingleton<LoadoutService>();
+        builder.Services.AddSingleton<EngineMetricsService>();
         builder.Services.AddSingleton<DayZPulse.Web.WebUiUpdateService>();
         builder.Services.AddHostedService<DayZPulse.Web.WebUiCheckService>();
 

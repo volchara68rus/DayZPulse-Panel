@@ -1900,7 +1900,6 @@ function applyStatus(status) {
 
     setText('dashUptime', formatDuration(status.uptimeSeconds));
     setText('dashStartedAt', status.startedAt ? 'с ' + formatTime(status.startedAt) : 'процесс не запущен');
-    setText('dashCpuVal', (status.cpuPercent ?? 0).toFixed(0) + '%');
 
     // Сервер остановлен — обнуляем всё, что зависит от процесса и мода,
     // иначе карточки висели бы с прошлыми значениями (онлайн, FPS).
@@ -1913,30 +1912,45 @@ function applyStatus(status) {
         const onlineBar = $('dashOnlineBar');
         if (onlineBar) onlineBar.style.width = '0%';
         setText('dashFps', '—');
-        setText('dashCpuVal', '—');
-        setText('dashThreadsVal', '—');
         fpsHistory = [];
         drawFpsChart('dashFpsSpark', [], '#4a90d9');
         setPlayerCount(0);
     }
 
-    // Память считаем только по процессу сервера (не по всей машине).
-    setText('dashRamVal', formatBytes(status.workingSetBytes));
-    setText('dashThreadsVal', status.threadCount > 0 ? String(status.threadCount) : '—');
+    // Ресурсы процесса. Показываем прочерк, когда процесса нет: иначе память,
+    // потоки и CPU «висели» бы на экране после остановки (метрики устарели).
+    // Это не зависит от трекера — считаем по самому процессу сервера.
+    const processDead = !status.running;
+    if (processDead) {
+        setText('dashCpuVal', '—');
+        setText('dashRamVal', '—');
+        setText('dashThreadsVal', '—');
 
-    const cpu = Math.min(100, Number(status.cpuPercent ?? 0));
-    const cpuBar = $('dashCpuBar');
-    if (cpuBar) {
-        cpuBar.style.width = cpu + '%';
-        cpuBar.className = cpu > 85 ? 'crit' : cpu > 60 ? 'warn' : 'blue';
+        const cpuBarStopped = $('dashCpuBar');
+        if (cpuBarStopped) cpuBarStopped.style.width = '0%';
+        const ramBarStopped = $('dashRamBar');
+        if (ramBarStopped) ramBarStopped.style.width = '0%';
+    } else {
+        setText('dashCpuVal', (status.cpuPercent ?? 0).toFixed(0) + '%');
+
+        const cpu = Math.min(100, Number(status.cpuPercent ?? 0));
+        const cpuBar = $('dashCpuBar');
+        if (cpuBar) {
+            cpuBar.style.width = cpu + '%';
+            cpuBar.className = cpu > 85 ? 'crit' : cpu > 60 ? 'warn' : 'blue';
+        }
+
+        // Память считаем только по процессу сервера (не по всей машине).
+        setText('dashRamVal', formatBytes(status.workingSetBytes));
+        setText('dashThreadsVal', status.threadCount > 0 ? String(status.threadCount) : '—');
+
+        // Полоса памяти — доля от всей памяти машины, чтобы масштаб был понятен.
+        const ramPercent = hostTotalMemoryBytes > 0
+            ? Math.min(100, (Number(status.workingSetBytes ?? 0) / hostTotalMemoryBytes) * 100)
+            : 0;
+        const ramBar = $('dashRamBar');
+        if (ramBar) ramBar.style.width = ramPercent.toFixed(1) + '%';
     }
-
-    // Полоса памяти — доля от всей памяти машины, чтобы масштаб был понятен.
-    const ramPercent = hostTotalMemoryBytes > 0
-        ? Math.min(100, (Number(status.workingSetBytes ?? 0) / hostTotalMemoryBytes) * 100)
-        : 0;
-    const ramBar = $('dashRamBar');
-    if (ramBar) ramBar.style.width = ramPercent.toFixed(1) + '%';
 
     const autoIcon = $('autoRestartBtn');
     const autoCount = $('autoRestartCount');
@@ -2069,6 +2083,9 @@ async function loadDashboard() {
 
         setText('dashThreadsVal', data.threadCount > 0 ? `${data.threadCount}` : '—');
 
+        // Метрики движка из лога: те же данные, что показывает #monitor.
+        renderEngineMetrics(data.engine, data.running);
+
         // Ресурсы: диск — заполнение тома, где лежит сервер.
         updateDiskUsage(item);
 
@@ -2077,6 +2094,49 @@ async function loadDashboard() {
         await loadDashboardEvents();
     } catch {
         // Дашборд — не критичный раздел.
+    }
+}
+
+/**
+ * Рисует карточку «Метрики движка» — те же данные, что показывает команда
+ * #monitor (средний FPS, память, число игроков, зомби и животных).
+ * Панель читает их из лога сервера, поэтому данные приходят с задержкой
+ * в несколько секунд (движок пишет их с заданным интервалом).
+ */
+function renderEngineMetrics(engine, running) {
+    if (!engine) {
+        for (const id of ['dashEngineFps', 'dashEngineMem', 'dashEnginePlayers',
+            'dashEngineZombies', 'dashEngineAnimals']) {
+            setText(id, '—');
+        }
+        setText('dashEngineAt', '');
+
+        const hint = $('dashEngineHint');
+        if (hint) {
+            hint.textContent = running
+                ? 'Данные появятся через несколько секунд: панель включает запись метрик при запуске сервера.'
+                : 'Запустите сервер — метрики появятся автоматически.';
+        }
+        return;
+    }
+
+    setText('dashEngineFps', engine.fps > 0 ? `${Math.round(engine.fps)} fps` : '—');
+    setText('dashEngineMem', engine.memoryBytes > 0 ? formatBytes(engine.memoryBytes) : '—');
+    setText('dashEnginePlayers', String(engine.players ?? '—'));
+
+    // Зомби и животные: «живые / всего».
+    const z = engine.infected;
+    setText('dashEngineZombies', z ? `${z.alive} / ${z.total}` : '—');
+
+    const a = engine.animals;
+    setText('dashEngineAnimals', a ? `${a.alive} / ${a.total}` : '—');
+
+    setText('dashEngineAt', engine.at ? 'обновлено ' + formatTime(engine.at) : '');
+
+    const hint = $('dashEngineHint');
+    if (hint) {
+        hint.innerHTML = 'Живые / всего. Те же данные, что выводит команда '
+            + '<span class="mono">#monitor</span>.';
     }
 }
 
@@ -2406,6 +2466,9 @@ function resetDashboard() {
     setText('dashRamVal', '—');
     setText('dashDiskVal', '—');
     setText('dashThreadsVal', '—');
+
+    // Метрики движка относятся к конкретному серверу — обнуляем.
+    renderEngineMetrics(null, false);
 
     drawFpsChart('dashFpsSpark', [], '#4a90d9');
     drawSpark('dashOnlineSpark', [], '#35b8c4');
@@ -5111,7 +5174,7 @@ async function runInit() {
     setInterval(() => {
         if (currentView === 'chat') Players.loadChat();
         if (currentView === 'anticheat') Players.loadViolations();
-        if (currentView === 'logs') Players.loadCommands();
+        if (currentView === 'anticheat') Players.loadEvents();
         if (currentView === 'logs') Players.loadCommands();
     }, 5000);
 

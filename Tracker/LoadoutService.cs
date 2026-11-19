@@ -90,6 +90,24 @@ public sealed class LoadoutService
         return new { assign, exclude = Array.Empty<string>() };
     }
 
+    /// <summary>
+    /// Приводит имя слота к имени, которое понимает движок (Slot_&lt;name&gt;).
+    /// Ранее в UI головной слот назывался "Head", а вместо "Armband" был
+    /// несуществующий "Neck" — такие наборы нужно починить на лету.
+    /// </summary>
+    private static string NormalizeSlot(string slot)
+    {
+        var s = slot?.Trim() ?? "";
+
+        return s switch
+        {
+            "" => "",
+            "Head" => "Headgear",
+            "Neck" => "Armband",
+            _ => s
+        };
+    }
+
     private static object SpawnAssign(string id, Loadout loadout, string label)
     {
         // Мод различает слоты экипировки (attachmentSlotItemSets) и карго (discreteUnsortedItemSets).
@@ -97,7 +115,7 @@ public sealed class LoadoutService
             .Where(i => i.Target == LoadoutTarget.Slot && !string.IsNullOrWhiteSpace(i.Slot))
             .Select(i => new
             {
-                slotName = i.Slot,
+                slotName = NormalizeSlot(i.Slot),
                 discreteItemSets = new[]
                 {
                     new

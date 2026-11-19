@@ -302,6 +302,46 @@ public static class QuickConfig
 
     public static bool GameplayFileExists(ServerSettings options) => File.Exists(GameplayPath(options));
 
+    // ==================================================== метрики движка (#monitor)
+
+    /// <summary>
+    /// Включает в serverDZ.cfg запись метрик производительности: средний FPS,
+    /// память, игроки, зомби и животные. Это те же данные, что выводит команда
+    /// <c>#monitor</c>, но движок пишет их в RPT, откуда панель их читает.
+    ///
+    /// Значения не перетираются, если уже заданы: пользователь мог поставить
+    /// свой интервал. Ставим только нули (выключено) и отсутствующие ключи.
+    /// </summary>
+    public static void EnableEngineMetrics(string workingDirectory, string configFile, int intervalSeconds)
+    {
+        var path = ConfigPath(workingDirectory, configFile);
+        var text = ReadText(path);
+        if (text.Length == 0)
+        {
+            return;
+        }
+
+        var value = Math.Clamp(intervalSeconds, 1, 60).ToString(CultureInfo.InvariantCulture);
+        var updated = text;
+
+        foreach (var key in new[] { "logAverageFps", "logMemory", "logPlayers", "logAI" })
+        {
+            var current = Value(updated, key);
+
+            // Ключа нет — добавляем. Ключ есть и равен 0 (выключено) — включаем.
+            // Ненулевое значение пользователя оставляем как есть.
+            if (current is null || current is "0" or "")
+            {
+                updated = SetValue(updated, key, value, create: true);
+            }
+        }
+
+        if (updated != text)
+        {
+            WriteText(path, updated);
+        }
+    }
+
     // ============================================================== миссия
 
     public static string? MissionDirectory(ServerSettings options)

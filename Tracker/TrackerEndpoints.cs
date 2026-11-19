@@ -865,7 +865,7 @@ public static class TrackerEndpoints
         });
 
         api.MapGet("/servers/{serverId}/tracker/dashboard", (string serverId, ServerRegistry registry,
-            SettingsStore settings) =>
+            SettingsStore settings, EngineMetricsService engineMetrics) =>
         {            var runtime = Require(registry, serverId);
             var state = runtime.Tracker.ServerState();
             var status = runtime.Supervisor.Status;
@@ -875,6 +875,9 @@ public static class TrackerEndpoints
 
             // Слоты берём из serverDZ.cfg (maxPlayers).
             var slots = TrackerService.ReadMaxPlayers(runtime.ServerSettings) ?? 0;
+
+            // Метрики движка из RPT — те же, что показывает команда #monitor.
+            var engine = engineMetrics.Latest(runtime.Id);
 
             return Results.Ok(new
             {
@@ -899,6 +902,32 @@ public static class TrackerEndpoints
                 vehicles = state?.Vehicles ?? 0,
                 infected = state?.Infected ?? 0,
                 worldObjects = state?.WorldObjects ?? 0,
+
+                // Метрики движка (аналог #monitor). null — движок ещё не писал
+                // их в лог (флаги logAverageFps/logMemory/logPlayers/logAI).
+                engine = engine is null ? null : new
+                {
+                    fps = engine.Fps,
+                    memoryBytes = engine.MemoryBytes,
+                    players = engine.Players,
+                    infected = new
+                    {
+                        alive = engine.InfectedAlive,
+                        dead = engine.InfectedDead,
+                        sleeping = engine.InfectedSleeping,
+                        distant = engine.InfectedDistant,
+                        total = engine.InfectedTotal
+                    },
+                    animals = new
+                    {
+                        alive = engine.AnimalsAlive,
+                        dead = engine.AnimalsDead,
+                        sleeping = engine.AnimalsSleeping,
+                        distant = engine.AnimalsDistant,
+                        total = engine.AnimalsTotal
+                    },
+                    at = engine.At
+                },
 
                 online24h = runtime.Tracker.OnlineHistory()
                     .Select(p => new { at = p.At, players = p.Players, alive = p.Alive })

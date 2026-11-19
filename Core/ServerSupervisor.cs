@@ -182,6 +182,25 @@ public sealed class ServerSupervisor
         }
     }
 
+    /// <summary>
+    /// Включает в serverDZ.cfg запись метрик движка (FPS, память, игроки,
+    /// зомби, животные) — те же данные, что показывает <c>#monitor</c>.
+    /// Панель читает их из RPT-лога.
+    /// </summary>
+    private void EnableEngineMetricsBeforeStart(ServerProfile profile)
+    {
+        try
+        {
+            var options = profile.Server;
+            var configFile = string.IsNullOrWhiteSpace(options.ConfigFile) ? "serverDZ.cfg" : options.ConfigFile;
+            QuickConfig.EnableEngineMetrics(ServerPaths.WorkingDirectory(options), configFile, 5);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "[{Server}] Не удалось включить метрики движка.", Name);
+        }
+    }
+
     public async Task<ServerStatus> StartAsync(string actor, CancellationToken cancellationToken)
     {
         await _operations.WaitAsync(cancellationToken);
@@ -207,6 +226,10 @@ public sealed class ServerSupervisor
             // Обновляем config.json мода перед каждым запуском: там адрес панели
             // (актуальный порт) и токен. Иначе мод подключается к устаревшему порту.
             WriteModConfigBeforeStart(profile);
+
+            // Включаем запись метрик движка в RPT (аналог #monitor): панель
+            // читает оттуда FPS, память, игроков, зомби и животных.
+            EnableEngineMetricsBeforeStart(profile);
 
             // Каждый запуск — с чистыми логами: существующие логи упаковываем
             // в zip, переносим в резервные копии и удаляем исходники.
@@ -329,7 +352,12 @@ public sealed class ServerSupervisor
                         State = ServerState.Stopped,
                         ProcessId = null,
                         StoppedAt = DateTimeOffset.Now,
-                        LastMessage = "Сервер остановлен"
+                        LastMessage = "Сервер остановлен",
+                        CpuPercent = 0,
+                        WorkingSetBytes = 0,
+                        PrivateBytes = 0,
+                        ThreadCount = 0,
+                        LastSampleAt = null
                     };
                 }
 
@@ -391,7 +419,12 @@ public sealed class ServerSupervisor
                     State = ServerState.Stopped,
                     ProcessId = null,
                     StoppedAt = DateTimeOffset.Now,
-                    LastMessage = "Сервер остановлен"
+                    LastMessage = "Сервер остановлен",
+                    CpuPercent = 0,
+                    WorkingSetBytes = 0,
+                    PrivateBytes = 0,
+                    ThreadCount = 0,
+                    LastSampleAt = null
                 };
             }
 
@@ -532,7 +565,12 @@ public sealed class ServerSupervisor
                 StoppedAt = DateTimeOffset.Now,
                 ExitCode = exitCode,
                 LastError = crashed ? $"Процесс завершился с кодом {exitCode}" : null,
-                LastMessage = intentional ? "Сервер остановлен" : $"Сервер завершился (код {exitCode})"
+                LastMessage = intentional ? "Сервер остановлен" : $"Сервер завершился (код {exitCode})",
+                CpuPercent = 0,
+                WorkingSetBytes = 0,
+                PrivateBytes = 0,
+                ThreadCount = 0,
+                LastSampleAt = null
             };
 
             if (!intentional && options.AutoRestartOnCrash)
@@ -649,6 +687,10 @@ public sealed class ServerSupervisor
         {
             if (process.HasExited)
             {
+                // Процесс завершился, но метрики в статусе остались от прошлого
+                // замера — обнуляем, иначе «Ресурсы» висели бы на последних
+                // значениях (память, потоки, CPU) при остановленном сервере.
+                ClearResourceMetrics();
                 return;
             }
 
@@ -678,6 +720,29 @@ public sealed class ServerSupervisor
         catch (Exception ex)
         {
             _logger.LogDebug(ex, "[{Server}] Не удалось снять метрики процесса.", Name);
+            ClearResourceMetrics();
+        }
+    }
+
+    /// <summary>Обнуляет метрики процесса (память, потоки, CPU) при остановке.</summary>
+    private void ClearResourceMetrics()
+    {
+        lock (_gate)
+        {
+            if (_status.CpuPercent == 0 && _status.WorkingSetBytes == 0 &&
+                _status.PrivateBytes == 0 && _status.ThreadCount == 0)
+            {
+                return;
+            }
+
+            _status = _status with
+            {
+                CpuPercent = 0,
+                WorkingSetBytes = 0,
+                PrivateBytes = 0,
+                ThreadCount = 0,
+                LastSampleAt = null
+            };
         }
     }
 
