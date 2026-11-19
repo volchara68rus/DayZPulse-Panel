@@ -698,7 +698,13 @@ function refreshCurrentView() {
         case 'configs': loadQuickSettings(); break;
         case 'mods': Players?.loadConfig(); Mods?.load(); break;
         case 'logs': Logs?.load(); Players?.loadCommands(); break;
-        case 'backups': loadBackups(); break;
+        case 'backups':
+            if ($('backupTabs')?.querySelector('[data-backup-tab="world"]')?.classList.contains('active')) {
+                loadWorldBackups();
+            } else {
+                loadBackups();
+            }
+            break;
         case 'schedule': loadSchedule(); break;
         case 'settings': loadSettings(); break;
         case 'players': if (typeof Players !== 'undefined') { Players.loadConfig(); Players.loadLive(); Players.loadDatabase(); } break;
@@ -1106,7 +1112,14 @@ function loadCurrentView() {
     if (name === 'configs') { loadQuickSettings(); Players?.loadConfig(); }
     if (name === 'mods') { Players?.loadConfig(); Mods?.load(); }
     if (name === 'logs') { Logs?.load(); Players?.loadCommands(); }
-    if (name === 'backups') loadBackups();
+    if (name === 'backups') {
+        // Открываем ту вкладку, что была активна: данные сервера или мир.
+        if ($('backupTabs')?.querySelector('[data-backup-tab="world"]')?.classList.contains('active')) {
+            loadWorldBackups();
+        } else {
+            loadBackups();
+        }
+    }
     if (name === 'schedule') loadSchedule();
     if (name === 'service') { loadService(); loadApplicationInfo(); loadWebUi(); }
     if (name === 'settings') loadSettings();
@@ -3862,6 +3875,132 @@ async function deleteBackup(fileName) {
 
 $('btnCreateBackup').addEventListener('click', createBackup);
 $('btnReloadBackups').addEventListener('click', loadBackups);
+
+/* ===================================================== сохранение мира */
+
+let worldRunning = false;
+
+async function loadWorldBackups() {
+    try {
+        const data = await api(sp('/world-backups'));
+        worldRunning = !!data.running;
+
+        setText('worldStorage', data.storage || 'папка не найдена');
+        setText('worldDirectory', data.directory ? 'Копии: ' + data.directory : '');
+
+        // На запущенном сервере сохранение писать нельзя — предупреждаем.
+        const warn = $('worldRunningWarning');
+        if (warn) warn.classList.toggle('hidden', !worldRunning);
+
+        const tbody = $('worldBackupRows');
+        clearChildren(tbody);
+
+        if (!data.items.length) {
+            const tr = document.createElement('tr');
+            const td = cell('Копий мира пока нет.', 'muted');
+            td.colSpan = 4;
+            tr.appendChild(td);
+            tbody.appendChild(tr);
+            return;
+        }
+
+        for (const item of data.items) {
+            const tr = document.createElement('tr');
+            tr.appendChild(cell(item.fileName, 'mono'));
+            tr.appendChild(cell(formatBytes(item.sizeBytes)));
+            tr.appendChild(cell(formatTime(item.createdAt)));
+
+            const actions = document.createElement('td');
+            actions.className = 'actions';
+
+            const download = document.createElement('a');
+            download.className = 'btn ghost sm';
+            download.textContent = 'Скачать';
+            download.href = '/api' + sp('/world-backups/download/' + encodeURIComponent(item.fileName));
+            actions.appendChild(download);
+
+            const restore = document.createElement('button');
+            restore.type = 'button';
+            restore.className = 'btn sm';
+            restore.textContent = 'Откатить';
+            restore.disabled = worldRunning;
+            restore.addEventListener('click', () => {
+                askConfirm(
+                    `Откатить мир к «${item.fileName}»? Текущее сохранение будет заменено; ` +
+                    'перед откатом панель сохранит отдельную копию.',
+                    () => restoreWorldBackup(item.fileName), 'Откатить');
+            });
+            actions.appendChild(restore);
+
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'btn danger sm';
+            remove.textContent = 'Удалить';
+            remove.addEventListener('click', () => {
+                askConfirm(`Удалить копию мира «${item.fileName}»?`, () => deleteWorldBackup(item.fileName), 'Удалить');
+            });
+            actions.appendChild(remove);
+
+            tr.appendChild(actions);
+            tbody.appendChild(tr);
+        }
+    } catch (error) {
+        toast('Не удалось получить копии мира', error.message, 'error');
+    }
+}
+
+async function createWorldBackup() {
+    if (worldRunning) {
+        toast('Сервер запущен', 'Остановите сервер: сохранение мира пишется постоянно.', 'warn', 7000);
+        return;
+    }
+
+    toast('Сохранение мира', 'Создание копии…', 'info', 4000);
+    try {
+        const result = await api(sp('/world-backups'), { method: 'POST' });
+        toast('Готово', result.message, 'info', 7000);
+        loadWorldBackups();
+    } catch (error) {
+        toast('Ошибка копирования', error.message, 'error', 9000);
+    }
+}
+
+async function restoreWorldBackup(fileName) {
+    try {
+        const result = await api(sp('/world-backups/restore'), { method: 'POST', body: { fileName } });
+        toast('Мир восстановлен', result.message, 'info', 10000);
+        loadWorldBackups();
+    } catch (error) {
+        toast('Ошибка отката', error.message, 'error', 10000);
+    }
+}
+
+async function deleteWorldBackup(fileName) {
+    try {
+        await api(sp('/world-backups/' + encodeURIComponent(fileName)), { method: 'DELETE' });
+        toast('Удалено', 'Копия мира удалена.', 'info');
+        loadWorldBackups();
+    } catch (error) {
+        toast('Не удалось удалить', error.message, 'error');
+    }
+}
+
+// Переключение вкладок «Данные сервера» / «Сохранение мира».
+document.querySelectorAll('#backupTabs .subtab').forEach((tab) => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('#backupTabs .subtab')
+            .forEach((t) => t.classList.toggle('active', t === tab));
+
+        const world = tab.dataset.backupTab === 'world';
+        $('backup-tab-server')?.classList.toggle('hidden', world);
+        $('backup-tab-world')?.classList.toggle('hidden', !world);
+
+        if (world) loadWorldBackups();
+    });
+});
+
+$('btnCreateWorldBackup')?.addEventListener('click', createWorldBackup);
+$('btnReloadWorldBackups')?.addEventListener('click', loadWorldBackups);
 
 /* ============================================================ расписание */
 

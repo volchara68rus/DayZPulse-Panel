@@ -210,9 +210,20 @@ public sealed class TrackerService : BackgroundService
 
                 // Метрики движка (аналог #monitor) читаем из RPT там же: это
                 // независимый от мода источник FPS, памяти и числа сущностей.
+                // Только для запущенного сервера: у остановленного в профилях
+                // остаётся RPT прошлого запуска, и его метрики выглядели бы
+                // как свежие, хотя сервер давно лежит.
                 try
                 {
-                    _engineMetrics.Poll(runtime.Profile, runtime.Id);
+                    if (runtime.Supervisor.IsRunning)
+                    {
+                        _engineMetrics.Poll(runtime.Profile, runtime.Id,
+                            runtime.Supervisor.Status.StartedAt);
+                    }
+                    else
+                    {
+                        _engineMetrics.Reset(runtime.Id);
+                    }
                 }
                 catch (Exception ex)
                 {

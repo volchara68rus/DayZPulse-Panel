@@ -302,6 +302,246 @@ public sealed class BackupManager
         }
     }
 
+    // ------------------------------------------------------- бэкапы мира
+
+    /// <summary>Копии сохранения мира лежат в <c>dayzpulse\backups\world</c>.</summary>
+    public string WorldDirectory => Path.Combine(ServerPaths.BackupsDirectory(_profile.Server), "world");
+
+    /// <summary>Папка сохранения миссии: <c>mpmissions\&lt;миссия&gt;\storage_&lt;instanceId&gt;</c>.</summary>
+    public string? WorldStoragePath()
+    {
+        var mission = QuickConfig.MissionDirectory(_profile.Server);
+        if (mission is null)
+        {
+            return null;
+        }
+
+        var instanceId = ReadInstanceId();
+        var storage = Path.Combine(mission, "storage_" + instanceId);
+
+        return System.IO.Directory.Exists(storage) ? storage : null;
+    }
+
+    /// <summary>Номер инстанса из serverDZ.cfg (по умолчанию 1).</summary>
+    private int ReadInstanceId()
+    {
+        try
+        {
+            var options = _profile.Server;
+            var file = ServerPaths.ConfigFile(options);
+            if (!File.Exists(file))
+            {
+                return 1;
+            }
+
+            var match = System.Text.RegularExpressions.Regex.Match(
+                File.ReadAllText(file), @"(?im)^\s*instanceId\s*=\s*(\d+)");
+
+            return match.Success && int.TryParse(match.Groups[1].Value, out var id) && id > 0 ? id : 1;
+        }
+        catch
+        {
+            return 1;
+        }
+    }
+
+    /// <summary>Список копий сохранения мира.</summary>
+    public IReadOnlyList<BackupInfo> ListWorld()
+    {
+        if (!System.IO.Directory.Exists(WorldDirectory))
+        {
+            return [];
+        }
+
+        return System.IO.Directory.EnumerateFiles(WorldDirectory, "*.zip")
+            .Select(path => new FileInfo(path))
+            .OrderByDescending(f => f.LastWriteTimeUtc)
+            .Select(f => new BackupInfo(f.Name, f.FullName, f.Length, new DateTimeOffset(f.LastWriteTimeUtc), "world"))
+            .ToArray();
+    }
+
+    /// <summary>
+    /// Создаёт копию сохранения мира (папка storage с игроками, постройками,
+    /// лутом). Мир пишется на диск всё время, пока сервер работает, поэтому
+    /// копировать его на живом сервере нельзя: перед созданием сервер должен
+    /// быть остановлен.
+    /// </summary>
+    public async Task<BackupResult> CreateWorldBackupAsync(CancellationToken cancellationToken)
+    {
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+        if (_supervisor.IsRunning)
+        {
+            return new BackupResult(false, null, 0, stopwatch.Elapsed,
+                "Остановите сервер: сохранение мира пишется постоянно, копия на живом сервере будет повреждена.");
+        }
+
+        var storage = WorldStoragePath();
+        if (storage is null)
+        {
+            return new BackupResult(false, null, 0, stopwatch.Elapsed,
+                "Папка сохранения мира не найдена. Проверьте, что сервер хотя бы раз запускался.");
+        }
+
+        try
+        {
+            System.IO.Directory.CreateDirectory(WorldDirectory);
+            var fileName = $"world-{DateTime.Now:yyyyMMdd-HHmmss}.zip";
+            var target = Path.Combine(WorldDirectory, fileName);
+
+            await Task.Run(() =>
+            {
+                using var zipStream = new FileStream(target, FileMode.Create, FileAccess.Write, FileShare.None);
+                using var archive = new ZipArchive(zipStream, ZipArchiveMode.Create);
+
+                // Пустые подкаталоги (например, 000-011) DayZ использует для
+                // хранения регионов. Файлов в них может не быть, но структуру
+                // нужно сохранить, иначе после отката они исчезнут.
+                var directories = System.IO.Directory
+                    .EnumerateDirectories(storage, "*", SearchOption.AllDirectories)
+                    .OrderBy(d => d, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+
+                foreach (var dir in directories)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    archive.CreateEntry(Path.GetRelativePath(storage, dir).Replace('\\', '/') + "/");
+                }
+
+                foreach (var file in System.IO.Directory.EnumerateFiles(storage, "*", SearchOption.AllDirectories))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    var relative = Path.GetRelativePath(storage, file).Replace('\\', '/');
+                    AddFile(archive, file, relative, CompressionLevel.Fastest);
+                }
+            }, cancellationToken);
+
+            TrimWorld();
+            _logger.LogInformation("[{Server}] Создана копия мира {File} за {Time}.",
+                _profile.Name, fileName, stopwatch.Elapsed);
+
+            return new BackupResult(true, fileName, new FileInfo(target).Length, stopwatch.Elapsed,
+                $"Копия мира {fileName} создана за {stopwatch.Elapsed.TotalSeconds:0.0} с.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[{Server}] Не удалось создать копию мира.", _profile.Name);
+            return new BackupResult(false, null, 0, stopwatch.Elapsed, "Ошибка создания копии мира: " + ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Откат к копии мира: заменяет текущую папку сохранения содержимым архива.
+    /// Требует остановленного сервера.
+    /// </summary>
+    public async Task<string> RestoreWorldAsync(string fileName, CancellationToken cancellationToken)
+    {
+        if (_supervisor.IsRunning)
+        {
+            throw new InvalidOperationException(
+                "Остановите сервер перед откатом: сохранение мира нельзя менять на работающем сервере.");
+        }
+
+        var path = ResolveWorldPath(fileName);
+        var storage = WorldStoragePath()
+            ?? throw new InvalidOperationException("Папка сохранения мира не найдена.");
+
+        // Текущее состояние сохраняем отдельной копией — на случай, если откат ошибочный.
+        var safety = await CreateWorldBackupAsync(cancellationToken);
+        _logger.LogInformation("[{Server}] Перед откатом мира сохранена копия {File}.",
+            _profile.Name, safety.FileName ?? "(не создана)");
+
+        var restored = 0;
+
+        await Task.Run(() =>
+        {
+            // Архив должен содержать только пути внутри storage: иначе это не
+            // наш дамп, и распаковывать его поверх сервера нельзя.
+            using (var probeStream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+            using (var probe = new ZipArchive(probeStream, ZipArchiveMode.Read))
+            {
+                foreach (var entry in probe.Entries)
+                {
+                    if (entry.FullName.Contains("..", StringComparison.Ordinal) || Path.IsPathRooted(entry.FullName))
+                    {
+                        throw new InvalidOperationException($"Недопустимый путь в архиве: {entry.FullName}");
+                    }
+                }
+            }
+
+            // Удаляем текущее сохранение и распаковываем копию на его место.
+            System.IO.Directory.Delete(storage, recursive: true);
+            System.IO.Directory.CreateDirectory(storage);
+
+            using var zipStream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+            using var archive = new ZipArchive(zipStream, ZipArchiveMode.Read);
+
+            foreach (var entry in archive.Entries)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                // Запись-каталог (пустой регион 000-011): просто создаём папку.
+                if (entry.FullName.EndsWith('/'))
+                {
+                    var dir = PathGuard.Resolve(entry.FullName.TrimEnd('/'), [storage]);
+                    System.IO.Directory.CreateDirectory(dir);
+                    continue;
+                }
+
+                var destination = PathGuard.Resolve(entry.FullName, [storage]);
+                System.IO.Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+                entry.ExtractToFile(destination, overwrite: true);
+                restored++;
+            }
+        }, cancellationToken);
+
+        _logger.LogInformation("[{Server}] Мир восстановлен из {File}: {Count} файлов.",
+            _profile.Name, fileName, restored);
+
+        return $"Восстановлено файлов: {restored}. Запустите сервер.";
+    }
+
+    public string ResolveWorldPath(string fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName) ||
+            fileName.Contains("..", StringComparison.Ordinal) || Path.IsPathRooted(fileName))
+        {
+            throw new UnauthorizedAccessException("Недопустимое имя файла копии мира.");
+        }
+
+        if (!System.IO.Directory.Exists(WorldDirectory))
+        {
+            throw new FileNotFoundException($"Копия мира не найдена: {fileName}");
+        }
+
+        var full = PathGuard.Resolve(fileName, [WorldDirectory]);
+        if (!File.Exists(full))
+        {
+            throw new FileNotFoundException($"Копия мира не найдена: {fileName}");
+        }
+
+        return full;
+    }
+
+    public bool DeleteWorld(string fileName)
+    {
+        var full = ResolveWorldPath(fileName);
+        File.Delete(full);
+        _logger.LogInformation("[{Server}] Копия мира удалена: {File}", _profile.Name, fileName);
+        return true;
+    }
+
+    private void TrimWorld()
+    {
+        var keep = Math.Max(1, _profile.Backups.WorldRetentionCount);
+
+        foreach (var info in ListWorld().Skip(keep))
+        {
+            TryDelete(info.FullPath);
+        }
+    }
+
     public async Task<string> RestoreAsync(string fileName, CancellationToken cancellationToken)
     {        var path = ResolveBackupPath(fileName);
         var workingDirectory = ServerPaths.WorkingDirectory(_profile.Server);

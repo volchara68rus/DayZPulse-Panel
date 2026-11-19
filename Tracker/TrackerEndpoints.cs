@@ -1691,6 +1691,103 @@ public static class TrackerEndpoints
             return Results.Ok(new { ok = true });
         });
 
+        // ------------------------------------------------ архив логов (внутри zip)
+
+        // Список файлов внутри архива логов — чтобы открыть любой, не распаковывая.
+        api.MapGet("/servers/{serverId}/logs/archive/{file}", (string serverId, string file,
+            ServerRegistry registry) =>
+        {
+            var path = Require(registry, serverId).Backups.ResolveBackupPath(file);
+            if (!path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+            {
+                return Results.BadRequest(new { error = "Это не zip-архив." });
+            }
+
+            var entries = ServerLogService.ListArchiveEntries(path);
+            return entries is null
+                ? Results.BadRequest(new { error = "Не удалось открыть архив." })
+                : Results.Ok(new { file, entries });
+        });
+
+        // Чтение строк из файла внутри архива логов — прямо из zip.
+        api.MapGet("/servers/{serverId}/logs/archive/{file}/entry", (string serverId, string file,
+            string name, int? tail, string? filter, ServerRegistry registry) =>
+        {
+            var path = Require(registry, serverId).Backups.ResolveBackupPath(file);
+            if (!path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+            {
+                return Results.BadRequest(new { error = "Это не zip-архив." });
+            }
+
+            var lines = ServerLogService.ReadArchive(path, name, tail ?? 500, filter);
+            return Results.Ok(new { file, name, count = lines.Count, lines });
+        });
+
+        // -------------------------------------------------- сохранение мира
+
+        // Путь к папке сохранения и список копий мира.
+        api.MapGet("/servers/{serverId}/world-backups", (string serverId, ServerRegistry registry) =>
+        {
+            var runtime = Require(registry, serverId);
+
+            return Results.Ok(new
+            {
+                storage = runtime.Backups.WorldStoragePath() ?? "",
+                directory = runtime.Backups.WorldDirectory,
+                running = runtime.Supervisor.IsRunning,
+                retention = runtime.Profile.Backups.WorldRetentionCount,
+                items = runtime.Backups.ListWorld()
+            });
+        });
+
+        api.MapPost("/servers/{serverId}/world-backups", async (string serverId, ServerRegistry registry,
+            AuditLog audit, HttpContext ctx) =>
+        {
+            var runtime = Require(registry, serverId);
+            var result = await runtime.Backups.CreateWorldBackupAsync(ctx.RequestAborted);
+
+            if (!result.Success)
+            {
+                return Results.BadRequest(new { error = result.Message });
+            }
+
+            audit.Write(Actor(ctx), "world.backup", result.FileName, null);
+            return Results.Ok(result);
+        });
+
+        api.MapPost("/servers/{serverId}/world-backups/restore", async (WorldRestoreRequest request,
+            string serverId, ServerRegistry registry, AuditLog audit, HttpContext ctx) =>
+        {
+            var runtime = Require(registry, serverId);
+
+            try
+            {
+                var message = await runtime.Backups.RestoreWorldAsync(request.FileName, ctx.RequestAborted);
+                audit.Write(Actor(ctx), "world.restore", request.FileName, null);
+                return Results.Ok(new { ok = true, message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.BadRequest(new { error = ex.Message, code = "world_restore_blocked" });
+            }
+        });
+
+        api.MapDelete("/servers/{serverId}/world-backups/{fileName}", (string serverId, string fileName,
+            ServerRegistry registry, AuditLog audit, HttpContext ctx) =>
+        {
+            var runtime = Require(registry, serverId);
+            runtime.Backups.DeleteWorld(fileName);
+            audit.Write(Actor(ctx), "world.delete", fileName, null);
+            return Results.Ok(new { ok = true });
+        });
+
+        api.MapGet("/servers/{serverId}/world-backups/download/{fileName}", (string serverId, string fileName,
+            ServerRegistry registry) =>
+        {
+            var path = Require(registry, serverId).Backups.ResolveWorldPath(fileName);
+            return Results.File(path, "application/zip", fileName);
+        });
+
         // -------------------------------------------------- инвентарь игрока
 
         // Каталог предметов сервера (из db/types.xml): класс + категория.
@@ -1982,6 +2079,8 @@ public static class TrackerEndpoints
 
     public sealed record QuickWeatherRequest(WeatherSettings Weather);
     public sealed record RestoreRequest(string FileName);
+
+    public sealed record WorldRestoreRequest(string FileName);
     public sealed record NoteRequest(string? Note, bool? Watch);
     public sealed record ChatSendRequest(string? Text);
     public sealed record PlayerActionRequest(int? Number, string? Reason, int? Minutes);

@@ -705,6 +705,62 @@ const Players = (() => {
     ];
 
     /**
+     * SVG-силуэт выжившего (вид спереди): графическая «кукла» для
+     * накидывания экипировки. Зоны слотов накладываются поверх рисунка.
+     */
+    const CHARACTER_SVG = `
+<svg class="inv-silhouette" viewBox="0 0 200 320" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false">
+  <defs>
+    <linearGradient id="sil-fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1e2c3a"/>
+      <stop offset="100%" stop-color="#141c24"/>
+    </linearGradient>
+    <linearGradient id="sil-fill-soft" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#223140"/>
+      <stop offset="100%" stop-color="#18222c"/>
+    </linearGradient>
+  </defs>
+  <g class="sil-body" fill="url(#sil-fill)" stroke="#3b4e63" stroke-width="1.6" stroke-linejoin="round">
+    <!-- Голова и шея -->
+    <ellipse cx="100" cy="32" rx="18" ry="22"/>
+    <rect x="92" y="52" width="16" height="10" rx="3" fill="url(#sil-fill-soft)"/>
+    <!-- Торс и плечи -->
+    <path d="M100 62
+             C72 64, 52 74, 46 92
+             L42 138
+             C42 144, 48 150, 56 150
+             L144 150
+             C152 150, 158 144, 158 138
+             L154 92
+             C148 74, 128 64, 100 62 Z"/>
+    <!-- Руки (вдоль корпуса, под перчатки-слоты) -->
+    <path d="M46 92 C36 110, 32 140, 34 170 L40 198 C42 206, 50 208, 54 202 L58 150 Z" fill="url(#sil-fill-soft)" stroke="#36485c"/>
+    <path d="M154 92 C164 110, 168 140, 166 170 L160 198 C158 206, 150 208, 146 202 L142 150 Z" fill="url(#sil-fill-soft)" stroke="#36485c"/>
+    <!-- Пояс / бёдра -->
+    <path d="M56 150 L144 150 L138 184 C136 188, 130 190, 122 190 L78 190 C70 190, 64 188, 62 184 Z" fill="url(#sil-fill-soft)"/>
+    <!-- Ноги -->
+    <path d="M78 190 L64 268 C62 276, 66 282, 74 284 L90 284 C96 284, 100 278, 100 270 L100 190 Z"/>
+    <path d="M122 190 L136 268 C138 276, 134 282, 126 284 L110 284 C104 284, 100 278, 100 270 L100 190 Z"/>
+    <!-- Стопы -->
+    <path d="M58 282 L92 282 L94 300 C94 306, 88 310, 80 310 L60 310 C52 310, 50 304, 52 298 Z"/>
+    <path d="M142 282 L108 282 L106 300 C106 306, 112 310, 120 310 L140 310 C148 310, 150 304, 148 298 Z"/>
+  </g>
+  <!-- Лёгкие контуры-разделители зон для читаемости -->
+  <g class="sil-lines" fill="none" stroke="#4b6278" stroke-width="1" stroke-dasharray="3 3" opacity=".7">
+    <line x1="58" y1="100" x2="142" y2="100"/>
+    <line x1="56" y1="150" x2="144" y2="150"/>
+    <line x1="78" y1="190" x2="122" y2="190"/>
+    <line x1="62" y1="268" x2="138" y2="268"/>
+  </g>
+</svg>`.trim();
+
+    /** Добавляет SVG-силуэт в контейнер фигурки, если его ещё нет. */
+    function ensureCharacterFigure(figure) {
+        if (!figure || figure.querySelector('.inv-silhouette')) return;
+        figure.insertAdjacentHTML('afterbegin', CHARACTER_SVG);
+    }
+
+    /**
      * Встроенный набор популярных предметов с группами — используется, пока
      * не загружен полный каталог сервера (или если types.xml недоступен).
      * Формат: [class, label, icon, group].
@@ -948,6 +1004,9 @@ const Players = (() => {
         const body = el('playerInvBody');
         const cargoList = el('playerInvCargo');
         if (!left || !right || !body || !cargoList) return;
+
+        // Графический силуэт персонажа для накидывания экипировки.
+        ensureCharacterFigure(body.closest('.inv-figure'));
 
         clear(left); clear(right); clear(body); clear(cargoList);
 
@@ -2469,7 +2528,8 @@ const Players = (() => {
         database: () => databaseRows,
         catalog: () => catalogItems,
         ensureCatalog, iconFor, groupFitsSlot,
-        SLOT_LAYOUT, BODY_ROWS, GROUP_LABELS,
+        SLOT_LAYOUT, BODY_ROWS, GROUP_LABELS, CHARACTER_SVG,
+        ensureCharacterFigure,
         buildSlot, buildBodyPart, buildCargoItem
     };
 })();

@@ -23,6 +23,7 @@ public sealed class ServerLogService
     public ServerLogService(ILogger<ServerLogService> logger)
     {
         _logger = logger;
+        UseLogger(logger);
     }
 
     /// <summary>Каталог профилей сервера (где лежат логи).</summary>
@@ -167,6 +168,84 @@ public sealed class ServerLogService
     {
         return IsLogFile(path);
     }
+
+    // -------------------------------------------------- чтение архивов логов
+
+    /// <summary>Содержимое одного файла внутри zip-архива логов (null — нет такого).</summary>
+    public static IReadOnlyList<string>? ListArchiveEntries(string archivePath)
+    {
+        try
+        {
+            using var stream = new FileStream(archivePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var archive = new System.IO.Compression.ZipArchive(stream, System.IO.Compression.ZipArchiveMode.Read);
+
+            return archive.Entries
+                .Where(e => !string.IsNullOrEmpty(e.Name))
+                .Select(e => e.FullName.Replace('\\', '/'))
+                .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+        catch (Exception ex)
+        {
+            _archiveLogger?.LogDebug(ex, "Не удалось открыть архив логов {File}.", archivePath);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Читает строки файла прямо из zip-архива логов — без распаковки на диск.
+    /// <paramref name="tail"/> — сколько последних строк, <paramref name="filter"/> — подстрока.
+    /// </summary>
+    public static IReadOnlyList<string> ReadArchive(
+        string archivePath, string entryName, int tail, string? filter)
+    {
+        var lines = new LinkedList<string>();
+
+        try
+        {
+            using var stream = new FileStream(archivePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var archive = new System.IO.Compression.ZipArchive(stream, System.IO.Compression.ZipArchiveMode.Read);
+
+            var entry = archive.GetEntry(entryName)
+                ?? archive.Entries.FirstOrDefault(e =>
+                    string.Equals(e.FullName.Replace('\\', '/'), entryName, StringComparison.OrdinalIgnoreCase));
+
+            if (entry is null)
+            {
+                return [];
+            }
+
+            tail = Math.Clamp(tail, 50, 20000);
+
+            using var reader = new StreamReader(entry.Open());
+            while (reader.ReadLine() is { } line)
+            {
+                if (!string.IsNullOrWhiteSpace(filter) &&
+                    line.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0)
+                {
+                    continue;
+                }
+
+                lines.AddLast(line);
+                if (lines.Count > tail)
+                {
+                    lines.RemoveFirst();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _archiveLogger?.LogDebug(ex, "Не удалось прочитать {Entry} из архива {File}.", entryName, archivePath);
+            return [];
+        }
+
+        return lines.ToArray();
+    }
+
+    private static ILogger? _archiveLogger;
+
+    /// <summary>Логгер для операций с архивами (задаётся один раз при старте).</summary>
+    public static void UseLogger(ILogger logger) => _archiveLogger ??= logger;
 
     /// <summary>Относится ли файл к логам сервера (RPT, ADM, script_*, error_*).</summary>
     public static bool IsLogFile(string path)

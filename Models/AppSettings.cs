@@ -432,6 +432,9 @@ public sealed class BackupSettings
 
     /// <summary>Резервное копирование логов сервера.</summary>
     public LogBackupSettings Logs { get; set; } = new();
+
+    /// <summary>Сколько копий сохранения мира хранить.</summary>
+    public int WorldRetentionCount { get; set; } = 10;
 }
 
 /// <summary>Настройки бэкапов и хранения логов сервера.</summary>

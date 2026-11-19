@@ -41,18 +41,27 @@ public sealed class EngineMetricsService
     public EngineMetrics? Latest(string serverId) =>
         _latest.TryGetValue(serverId, out var m) ? m : null;
 
-    /// <summary>Сброс при перезапуске сервера: RPT начинается заново.</summary>
+    /// <summary>
+    /// Полный сброс: смещение чтения, привязка к файлу и последние метрики.
+    /// Вызывается при остановке (данные прошлого запуска больше не актуальны)
+    /// и при перезапуске (RPT начинается заново).
+    /// </summary>
     public void Reset(string serverId)
     {
         _offsets.Remove(serverId);
         _fileByServer.Remove(serverId);
+        _latest.Remove(serverId);
     }
 
     /// <summary>
     /// Читает новые строки RPT и обновляет метрики. Вызывается периодически;
     /// читает только дописанную часть файла.
     /// </summary>
-    public void Poll(ServerProfile profile, string serverId)
+    /// <param name="notBefore">
+    /// Момент запуска сервера. RPT старше него — это лог прошлого запуска
+    /// (новый файл создаётся не сразу), его метрики неактуальны.
+    /// </param>
+    public void Poll(ServerProfile profile, string serverId, DateTimeOffset? notBefore = null)
     {
         var path = NewestRpt(profile);
         if (path is null)
@@ -62,6 +71,17 @@ public sealed class EngineMetricsService
 
         try
         {
+            var info = new FileInfo(path);
+
+            // Лог прошлого запуска: движок ещё не создал новый RPT.
+            // Иначе панель показала бы старые FPS и память как свежие.
+            // Запас в 2 минуты — на разницу часов и момент создания файла.
+            if (notBefore is { } start &&
+                info.LastWriteTimeUtc < start.UtcDateTime.AddMinutes(-2))
+            {
+                return;
+            }
+
             // Сменился файл (новый запуск сервера) — читаем с начала.
             if (_fileByServer.TryGetValue(serverId, out var previous) &&
                 !string.Equals(previous, path, StringComparison.OrdinalIgnoreCase))
@@ -70,7 +90,6 @@ public sealed class EngineMetricsService
             }
             _fileByServer[serverId] = path;
 
-            var info = new FileInfo(path);
             var offset = _offsets.GetValueOrDefault(serverId, 0);
 
             // Файл переписали (ротация) — начинаем заново.

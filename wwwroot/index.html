@@ -1002,8 +1002,13 @@
 
     <!-- ==================== РЕЗЕРВНЫЕ КОПИИ ==================== -->
     <section class="view" id="view-backups">
-      <div class="card">
-        <h2><span class="ic">⛁</span>Резервные копии</h2>
+      <div class="subnav" id="backupTabs" style="margin-bottom:14px">
+        <button class="subtab active" data-backup-tab="server" type="button">Данные сервера</button>
+        <button class="subtab" data-backup-tab="world" type="button">Сохранение мира</button>
+      </div>
+
+      <div class="card" id="backup-tab-server">
+        <h2><span class="ic">⛁</span>Резервные копии сервера</h2>
         <div class="row between" style="margin-bottom:14px">
           <span class="muted mono" id="backupDirectory">—</span>
           <div class="row">
@@ -1014,6 +1019,31 @@
         <table class="table">
           <thead><tr><th>Файл</th><th>Тип</th><th>Размер</th><th>Создана</th><th></th></tr></thead>
           <tbody id="backupRows"></tbody>
+        </table>
+      </div>
+
+      <!-- Сохранение мира: игроки, постройки, лут, базы. -->
+      <div class="card hidden" id="backup-tab-world">
+        <h2><span class="ic">🌍</span>Сохранение мира</h2>
+        <div class="help" style="margin-bottom:10px">
+          Копия папки <span class="mono" id="worldStorage">—</span>: игроки, постройки, лут и базы.
+          Движок пишет её постоянно, пока сервер работает, поэтому копию и откат делают
+          <b>только при остановленном сервере</b>.
+        </div>
+        <div class="row between" style="margin-bottom:14px">
+          <span class="muted mono" id="worldDirectory">—</span>
+          <div class="row">
+            <button class="btn primary sm" id="btnCreateWorldBackup" type="button">Сохранить мир</button>
+            <button class="btn ghost sm" id="btnReloadWorldBackups" type="button">Обновить</button>
+          </div>
+        </div>
+        <div class="auth-alert hidden" id="worldRunningWarning"
+             style="background:#2c2410;border-color:#4a3c1a;color:#e9c46a;margin-bottom:12px">
+          Сервер запущен. Остановите его, чтобы создать копию или откатиться.
+        </div>
+        <table class="table">
+          <thead><tr><th>Файл</th><th>Размер</th><th>Создана</th><th></th></tr></thead>
+          <tbody id="worldBackupRows"></tbody>
         </table>
       </div>
     </section>

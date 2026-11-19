@@ -12,9 +12,9 @@
     <Product>DayZPulse</Product>
     <Company>DayZPulse</Company>
     <Description>РџР°РЅРµР»СЊ СѓРїСЂР°РІР»РµРЅРёСЏ РёРіСЂРѕРІС‹Рј СЃРµСЂРІРµСЂРѕРј СЃ Р»РѕРєР°Р»СЊРЅС‹Рј РІРµР±-РёРЅС‚РµСЂС„РµР№СЃРѕРј</Description>
-    <Version>2.2.4</Version>
-    <FileVersion>2.2.4.0</FileVersion>
-    <AssemblyVersion>2.2.4.0</AssemblyVersion>
+    <Version>2.2.6</Version>
+    <FileVersion>2.2.6.0</FileVersion>
+    <AssemblyVersion>2.2.6.0</AssemblyVersion>
     <ApplicationIcon>installer\app.ico</ApplicationIcon>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <InvariantGlobalization>false</InvariantGlobalization>

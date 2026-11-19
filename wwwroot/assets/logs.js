@@ -12,6 +12,12 @@ const Logs = (() => {
     let followTimer = null;  // автообновление логов
     let lastLine = '';       // последняя показанная строка (для дописывания)
 
+    // Архивы логов открываются прямо внутри zip, без распаковки.
+    let archiveName = null;  // имя открытого архива
+    let archiveEntry = null; // выбранный файл внутри архива
+    let liveFiles = [];      // текущие логи сервера
+    let archiveFiles = [];   // сохранённые архивы логов
+
     const apiPath = (path) => {
         const id = App.currentServerId;
         return id ? `/servers/${encodeURIComponent(id)}${path}` : path;
@@ -34,19 +40,27 @@ const Logs = (() => {
             text('logsDirectory', data.directory || '');
 
             lastSettings = data.settings ?? {};
+            liveFiles = data.files ?? [];
+            archiveFiles = data.backups ?? [];
+
             const dirHint = el('logBackupDir');
             if (dirHint) {
-                const count = (data.backups ?? []).length;
                 dirHint.textContent = data.backupDirectory
-                    ? `Копии логов: ${data.backupDirectory}` + (count ? ` · архивов: ${count}` : '')
+                    ? `Копии логов: ${data.backupDirectory}` + (archiveFiles.length ? ` · архивов: ${archiveFiles.length}` : '')
                     : '—';
             }
 
-            renderFiles(data.files ?? []);
+            // Архив открыт — перечитываем его содержимое (мог появиться новый).
+            if (archiveName) {
+                await openArchive(archiveName);
+                return;
+            }
+
+            renderFiles(liveFiles);
 
             // Если файл ещё не выбран — открываем самый свежий.
-            if (!current && (data.files ?? []).length) {
-                await open(data.files[0].name);
+            if (!current && liveFiles.length) {
+                await open(liveFiles[0].name);
             } else if (current) {
                 await open(current);
             }
@@ -55,12 +69,13 @@ const Logs = (() => {
         }
     }
 
+    /** Список: текущие логи + сохранённые архивы (открываются на месте). */
     function renderFiles(files) {
         const box = el('logFiles');
         if (!box) return;
         clear(box);
 
-        if (!files.length) {
+        if (!files.length && !archiveFiles.length) {
             const hint = document.createElement('div');
             hint.className = 'muted';
             hint.style.fontSize = '12px';
@@ -70,32 +85,106 @@ const Logs = (() => {
         }
 
         for (const file of files) {
-            const row = document.createElement('button');
-            row.type = 'button';
-            row.className = 'log-item' + (file.name === current ? ' active' : '');
-            row.dataset.name = file.name;
-
-            const icon = document.createElement('span');
-            icon.className = 'log-kind log-kind-' + (file.kind || 'log');
-            icon.textContent = kindIcon(file.kind);
-
-            const info = document.createElement('span');
-            info.className = 'log-item-info';
-            const name = document.createElement('b');
-            name.textContent = file.name;
-            const meta = document.createElement('span');
-            meta.className = 'muted';
-            meta.style.fontSize = '11px';
-            meta.textContent = `${formatBytes(file.sizeBytes)} · ${formatTime(file.modified)}`;
-            info.appendChild(name);
-            info.appendChild(meta);
-
-            row.appendChild(icon);
-            row.appendChild(info);
-            row.addEventListener('click', () => open(file.name));
-
-            box.appendChild(row);
+            box.appendChild(fileRow({
+                icon: kindIcon(file.kind),
+                kind: file.kind,
+                title: file.name,
+                meta: `${formatBytes(file.sizeBytes)} · ${formatTime(file.modified)}`,
+                active: file.name === current && !archiveName,
+                onClick: () => open(file.name)
+            }));
         }
+
+        // Архивы логов: клик открывает содержимое прямо из zip.
+        if (archiveFiles.length) {
+            const caption = document.createElement('div');
+            caption.className = 'muted';
+            caption.style.fontSize = '11px';
+            caption.style.margin = '8px 2px 4px';
+            caption.textContent = 'Архивы логов (открываются внутри)';
+            box.appendChild(caption);
+
+            for (const file of archiveFiles) {
+                box.appendChild(fileRow({
+                    icon: '📦',
+                    kind: 'archive',
+                    title: file.fileName,
+                    meta: `${formatBytes(file.sizeBytes)} · ${formatTime(file.createdAt)}`,
+                    active: file.fileName === archiveName,
+                    onClick: () => openArchive(file.fileName)
+                }));
+            }
+        }
+    }
+
+    /** Одна строка списка файлов. */
+    function fileRow({ icon, kind, title, meta, active, onClick }) {
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'log-item' + (active ? ' active' : '');
+        row.dataset.name = title;
+
+        const iconNode = document.createElement('span');
+        iconNode.className = 'log-kind log-kind-' + (kind || 'log');
+        iconNode.textContent = icon;
+
+        const info = document.createElement('span');
+        info.className = 'log-item-info';
+        const name = document.createElement('b');
+        name.textContent = title;
+        const metaNode = document.createElement('span');
+        metaNode.className = 'muted';
+        metaNode.style.fontSize = '11px';
+        metaNode.textContent = meta;
+        info.appendChild(name);
+        info.appendChild(metaNode);
+
+        row.appendChild(iconNode);
+        row.appendChild(info);
+        row.addEventListener('click', onClick);
+        return row;
+    }
+
+    /** Список файлов внутри открытого архива + кнопка возврата. */
+    function renderArchiveEntries(entries) {
+        const box = el('logFiles');
+        if (!box) return;
+        clear(box);
+
+        const back = document.createElement('button');
+        back.type = 'button';
+        back.className = 'btn ghost sm';
+        back.style.marginBottom = '8px';
+        back.textContent = '← К списку логов';
+        back.addEventListener('click', closeArchive);
+        box.appendChild(back);
+
+        const caption = document.createElement('div');
+        caption.className = 'muted mono';
+        caption.style.fontSize = '11px';
+        caption.style.margin = '0 2px 6px';
+        caption.textContent = archiveName;
+        box.appendChild(caption);
+
+        for (const name of entries) {
+            box.appendChild(fileRow({
+                icon: kindIcon(archiveKind(name)),
+                kind: archiveKind(name),
+                title: name,
+                meta: '',
+                active: name === archiveEntry,
+                onClick: () => openArchiveEntry(name)
+            }));
+        }
+    }
+
+    function archiveKind(name) {
+        const lower = (name || '').toLowerCase();
+        if (lower.endsWith('.rpt')) return 'rpt';
+        if (lower.endsWith('.adm')) return 'adm';
+        if (lower.includes('script')) return 'script';
+        if (lower.includes('error')) return 'error';
+        return 'log';
     }
 
     function kindIcon(kind) {
@@ -104,14 +193,67 @@ const Logs = (() => {
             case 'adm': return '🛡';
             case 'script': return '📜';
             case 'error': return '⚠';
+            case 'archive': return '📦';
             default: return '📁';
         }
+    }
+
+    /* -------------------------------------------------- архивы логов (zip) */
+
+    /** Открывает архив: показывает список файлов внутри, не распаковывая. */
+    async function openArchive(name) {
+        archiveName = name;
+        archiveEntry = null;
+        current = null;
+        stopFollow();
+
+        text('logTitle', name);
+
+        try {
+            const data = await App.api(apiPath(`/logs/archive/${encodeURIComponent(name)}`));
+            const entries = data.entries ?? [];
+            renderArchiveEntries(entries);
+
+            if (!entries.length) {
+                showContent(['В архиве нет файлов.'], true);
+                return;
+            }
+
+            // Сразу открываем первый файл — чаще всего это RPT.
+            const preferred = entries.find((n) => n.toLowerCase().endsWith('.rpt')) ?? entries[0];
+            await openArchiveEntry(preferred);
+        } catch (error) {
+            App.toast('Не удалось открыть архив', error.message, 'error');
+        }
+    }
+
+    /** Возвращает список к текущим логам сервера. */
+    function closeArchive() {
+        archiveName = null;
+        archiveEntry = null;
+        renderFiles(liveFiles);
+        if (liveFiles.length) open(liveFiles[0].name);
+    }
+
+    /** Показывает файл внутри архива (читается из zip). */
+    async function openArchiveEntry(name) {
+        archiveEntry = name;
+        lastLine = '';
+        text('logTitle', `${archiveName} · ${name}`);
+
+        for (const item of document.querySelectorAll('#logFiles .log-item')) {
+            item.classList.toggle('active', item.dataset.name === name);
+        }
+
+        await refresh();
     }
 
     /* ------------------------------------------------------------- просмотр */
 
     async function open(name) {
         current = name;
+        archiveName = null;
+        archiveEntry = null;
         lastLine = '';
         text('logTitle', name);
 
@@ -125,7 +267,7 @@ const Logs = (() => {
     }
 
     async function refresh() {
-        if (!current) return;
+        if (!current && !archiveEntry) return;
 
         const tail = Number(el('logTail')?.value ?? 500);
         const filter = (el('logFilter')?.value ?? '').trim();
@@ -135,26 +277,22 @@ const Logs = (() => {
             const query = new URLSearchParams({ tail: String(tail) });
             if (filter) query.set('filter', filter);
 
-            const data = await App.api(apiPath(`/logs/${encodeURIComponent(current)}?${query}`));
-            clear(box);
+            // Файл внутри архива читается из zip, обычный лог — с диска.
+            const url = archiveEntry
+                ? apiPath(`/logs/archive/${encodeURIComponent(archiveName)}/entry?` +
+                    new URLSearchParams({ name: archiveEntry, tail: String(tail), ...(filter ? { filter } : {}) }))
+                : apiPath(`/logs/${encodeURIComponent(current)}?${query}`);
 
+            const data = await App.api(url);
             const lines = data.lines ?? [];
+
             if (!lines.length) {
-                const hint = document.createElement('span');
-                hint.className = 'muted';
-                hint.textContent = filter ? 'Ничего не найдено по фильтру.' : 'Лог пуст.';
-                box.appendChild(hint);
+                showContent([filter ? 'Ничего не найдено по фильтру.' : 'Файл пуст.'], true);
                 lastLine = '';
                 return;
             }
 
-            for (const line of lines) {
-                const row = document.createElement('span');
-                row.className = 'log-line' + lineClass(line);
-                row.textContent = line;
-                box.appendChild(row);
-            }
-
+            showContent(lines, false);
             lastLine = lines[lines.length - 1];
             box.scrollTop = box.scrollHeight;
         } catch (error) {
@@ -162,9 +300,24 @@ const Logs = (() => {
         }
     }
 
+    /** Рисует строки в панели просмотра (или заглушку). */
+    function showContent(lines, muted) {
+        const box = el('logContent');
+        if (!box) return;
+        clear(box);
+
+        for (const line of lines) {
+            const row = document.createElement('span');
+            row.className = muted ? 'log-line muted' : 'log-line' + lineClass(line);
+            row.textContent = line;
+            box.appendChild(row);
+        }
+    }
+
     /** Автообновление: дописывает только новые строки, не сбрасывая прокрутку. */
     async function follow() {
-        if (!current || el('logFollow')?.checked === false) return;
+        // Архив неизменяем и живёт на диске: следить не за чем.
+        if (archiveEntry || !current || el('logFollow')?.checked === false) return;
 
         const tail = Number(el('logTail')?.value ?? 500);
         const filter = (el('logFilter')?.value ?? '').trim();
@@ -327,6 +480,8 @@ const Logs = (() => {
 
     function reset() {
         current = null;
+        archiveName = null;
+        archiveEntry = null;
         lastLine = '';
         stopFollow();
     }

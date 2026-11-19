@@ -147,6 +147,11 @@ const Loadouts = (() => {
                 right.appendChild(buildSideSlot(key, label, icon, visual.slots[key]));
             }
 
+            if (Players.ensureCharacterFigure) {
+                Players.ensureCharacterFigure(figure);
+            } else if (Players.CHARACTER_SVG) {
+                figure.insertAdjacentHTML('afterbegin', Players.CHARACTER_SVG);
+            }
             figure.append(body, left, right);
 
             // Карго + руки.
