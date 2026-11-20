@@ -36,6 +36,11 @@ public sealed class TrackerStore
     private const int MaxViolations = 2000;
     private const int MaxTrackPointsPerPlayer = 5000;
 
+    // Точку трека пишем не чаще, чем раз в TRACK_SAMPLE_SECONDS: частые
+    // точки почти не добавляют точности, но быстро заполняют базу.
+    private const int TrackSampleSeconds = 8;
+    private static readonly TimeSpan TrackSampleInterval = TimeSpan.FromSeconds(TrackSampleSeconds);
+
     /// <summary>История онлайна за 24 часа: точка на каждые 5 минут.</summary>
     private readonly List<OnlinePoint> _online = [];
 
@@ -103,7 +108,7 @@ public sealed class TrackerStore
                 _live[player.Id] = player;
 
                 var track = _tracks.TryGetValue(player.Id, out var existing) ? existing : [];
-                if (track.Count == 0 || (now - track[^1].At).TotalSeconds >= 2)
+                if (track.Count == 0 || (now - track[^1].At) >= TrackSampleInterval)
                 {
                     track.Add(new TrackPoint(now, player.X, player.Z));
                     while (track.Count > MaxTrackPointsPerPlayer)

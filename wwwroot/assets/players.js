@@ -61,6 +61,13 @@ const Players = (() => {
         const mapObjects = el('liveMapObjects');
         if (mapObjects) clear(mapObjects);
 
+        const mapTrack = el('mapTrackOverlay');
+        if (mapTrack) clear(mapTrack);
+
+        // Трек, показанный на карте, тоже сбрасываем.
+        playerTrack = null;
+        updateTrackControls();
+
         // Карта у каждого сервера своя: сбрасываем метаданные и тайлы,
         // но сам объект карты переиспользуем (иначе на одном элементе
         // копились бы обработчики мыши).
@@ -220,8 +227,39 @@ const Players = (() => {
             if (currentCardId && card?.classList.contains('open')) {
                 renderPlayerEvents(currentCardId);
             }
+
+            // Показан трек игрока — подтягиваем новые точки, чтобы линия
+            // на карте «дорисовывалась» по мере движения (не чаще раза в 5 с).
+            refreshShownTrack();
         } catch (error) {
             text('playersConnection', 'ошибка: ' + error.message);
+        }
+    }
+
+    let trackRefreshAt = 0;
+
+    /** Обновляет точки уже показанного трека, если игрок ещё в сети. */
+    async function refreshShownTrack() {
+        if (!playerTrack || !playerTrack.points.length) return;
+
+        const now = Date.now();
+        if (now - trackRefreshAt < 5000) return;
+        trackRefreshAt = now;
+
+        const online = livePlayers.some((p) => p.id === playerTrack.id);
+        if (!online) return;
+
+        try {
+            const data = await App.api(
+                apiPath(`/tracker/players/${encodeURIComponent(playerTrack.id)}/track?points=300`));
+            if (!playerTrack || data.id !== playerTrack.id || !data.count) return;
+
+            playerTrack.points = data.points;
+            playerTrack.count = data.count;
+            updateTrackControls();
+            drawMapOverlay();
+        } catch {
+            // Обновление трека — не критично.
         }
     }
 
@@ -294,6 +332,7 @@ const Players = (() => {
             const actionsBox = document.createElement('span');
             actionsBox.className = 'cell-actions';
             actionsBox.addEventListener('click', (event) => event.stopPropagation());
+            actionsBox.appendChild(actionButton('Трек', () => showPlayerTrackById(player.id, player.name)));
             actionsBox.appendChild(actionButton('Лечить', () => command('heal', { id: player.id })));
             actionsBox.appendChild(actionButton('Телепорт', () => promptTeleport(player)));
             actionsBox.appendChild(actionButton('Кикнуть', () => kickPlayer(player), 'danger'));
@@ -442,7 +481,7 @@ const Players = (() => {
         if (!databaseRows.length) {
             const tr = document.createElement('tr');
             const td = cell('Записей нет — данных от мода пока не было.', 'muted');
-            td.colSpan = 8;
+            td.colSpan = 10;
             tr.appendChild(td);
             body.appendChild(tr);
             return;
@@ -498,6 +537,14 @@ const Players = (() => {
             tr.appendChild(cell(player.kills));
             tr.appendChild(cell(player.deaths));
             tr.appendChild(cell(player.kd));
+
+            // Трек доступен и для оффлайн-игрока: он строится из базы.
+            const actions = document.createElement('td');
+            actions.className = 'actions';
+            const trackButton = actionButton('Трек', () => showPlayerTrackById(player.id, player.name));
+            trackButton.addEventListener('click', (event) => event.stopPropagation());
+            actions.appendChild(trackButton);
+            tr.appendChild(actions);
 
             body.appendChild(tr);
         }
@@ -599,7 +646,7 @@ const Players = (() => {
             }
 
             renderSurvivalStats(live?.stats);
-            await renderPlayerTrack(id);
+            await renderPlayerTrack(id, name);
             await renderPlayerEvents(id);
 
             const note = el('playerModalNote');
@@ -1305,14 +1352,20 @@ const Players = (() => {
         box.appendChild(flags);
     }
 
-    async function renderPlayerTrack(id) {
+    /**
+     * Карточка игрока: вместо встроенного графика — короткая сводка по треку
+     * и кнопка «Показать на карте». Сам трек перенесён на живую карту, где он
+     * рисуется в реальных координатах (см. showTrackOnMap).
+     */
+    async function renderPlayerTrack(id, name) {
         const box = el('playerModalTrack');
         clear(box);
         try {
             const data = await App.api(apiPath(`/tracker/players/${encodeURIComponent(id)}/track?points=300`));
-            text('playerModalTrackCount', `${data.count} точек за период`);
+            const track = { id, name: name || id, points: data.points ?? [], count: data.count ?? 0, visible: true };
+            lastTrack = track;
 
-            if (!data.count) {
+            if (!track.count) {
                 const hint = document.createElement('span');
                 hint.className = 'muted';
                 hint.textContent = 'Трек пуст — данных пока недостаточно.';
@@ -1320,52 +1373,142 @@ const Players = (() => {
                 return;
             }
 
-            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-            svg.setAttribute('viewBox', '0 0 300 140');
-            svg.setAttribute('preserveAspectRatio', 'none');
-            svg.setAttribute('class', 'track-svg');
-
-            const points = data.points;
-            const xs = points.map((p) => p.x);
-            const zs = points.map((p) => p.z);
+            const xs = track.points.map((p) => p.x);
+            const zs = track.points.map((p) => p.z);
             const minX = Math.min(...xs), maxX = Math.max(...xs);
             const minZ = Math.min(...zs), maxZ = Math.max(...zs);
-            const spanX = maxX - minX || 1;
-            const spanZ = maxZ - minZ || 1;
+            const span = Math.max(maxX - minX, maxZ - minZ);
 
-            const coords = points.map((p, index) => {
-                const px = ((p.x - minX) / spanX) * 290 + 5;
-                const py = 135 - ((p.z - minZ) / spanZ) * 130;
-                return { x: px, y: py, last: index === points.length - 1 };
-            });
+            const facts = document.createElement('div');
+            facts.className = 'pm-facts';
+            const rows = [
+                ['Откуда', `${fmtCoord(minX)} : ${fmtCoord(minZ)}`],
+                ['Куда', `${fmtCoord(maxX)} : ${fmtCoord(maxZ)}`],
+                ['Разброс', `${fmtCoord(span)} м`]
+            ];
+            for (const [key, value] of rows) {
+                const item = document.createElement('div');
+                item.className = 'pm-fact';
+                const k = document.createElement('span');
+                k.className = 'k';
+                k.textContent = key;
+                const v = document.createElement('b');
+                v.textContent = value;
+                item.appendChild(k);
+                item.appendChild(v);
+                facts.appendChild(item);
+            }
+            box.appendChild(facts);
 
-            const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
-            polyline.setAttribute('points', coords.map((c) => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' '));
-            polyline.setAttribute('fill', 'none');
-            polyline.setAttribute('stroke', '#3fb950');
-            polyline.setAttribute('stroke-width', '2');
-            svg.appendChild(polyline);
-
-            const last = coords[coords.length - 1];
-            const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-            circle.setAttribute('cx', last.x.toFixed(1));
-            circle.setAttribute('cy', last.y.toFixed(1));
-            circle.setAttribute('r', '4');
-            circle.setAttribute('fill', '#4a90d9');
-            svg.appendChild(circle);
-
-            box.appendChild(svg);
-
-            const caption = document.createElement('div');
-            caption.className = 'help';
-            caption.textContent = `${fmtCoord(minX)}:${fmtCoord(minZ)} → ${fmtCoord(maxX)}:${fmtCoord(maxZ)}`;
-            box.appendChild(caption);
+            const show = document.createElement('button');
+            show.type = 'button';
+            show.className = 'btn primary sm';
+            show.textContent = '🗺 Показать трек на карте';
+            show.addEventListener('click', () => showTrackOnMap(track));
+            box.appendChild(show);
         } catch (error) {
             const hint = document.createElement('span');
             hint.className = 'muted';
             hint.textContent = 'Не удалось получить трек: ' + error.message;
             box.appendChild(hint);
         }
+    }
+
+    /* -------------------------------------------- трек на живой карте */
+
+    // Последний загруженный трек (для кнопки «Показать на карте» из карточки).
+    let lastTrack = null;
+
+    /** Открывает карту и показывает переданный трек (или загружает по id). */
+    async function showTrackOnMap(track) {
+        const payload = track ?? lastTrack;
+        if (!payload?.points?.length) {
+            App.toast('Трек пуст', 'Для этого игрока пока нет точек перемещения.', 'warn');
+            return;
+        }
+
+        // По умолчанию трек показан; переключатель в панели скрывает его.
+        playerTrack = { ...payload, visible: payload.visible !== false };
+
+        // Карточка игрока могла быть открыта — закрываем, иначе она закроет карту.
+        el('playerModal')?.classList.remove('open');
+
+        App.showView('livemap');
+        updateTrackControls();
+
+        // Карта могла быть ещё не создана: сначала создаём её (initLiveMap),
+        // затем ждём метаданные и размер контейнера, чтобы правильно
+        // отцентрировать вид на треке.
+        initLiveMap();
+        await ensureMapInfo();
+
+        // Контейнер карты получает размер не мгновенно после переключения
+        // вкладки — дожидаемся его, иначе fit() посчитает вид по нулю.
+        for (let i = 0; i < 40 && !liveMap?.hasSize; i++) {
+            await new Promise((resolve) => setTimeout(resolve, 50));
+            liveMap?.invalidateSize();
+        }
+
+        fitTrackView(payload);
+        drawMapOverlay();
+    }
+
+    /** Показывает трек игрока по id (загружает и кладёт на карту). */
+    async function showPlayerTrackById(id, name) {
+        try {
+            const data = await App.api(apiPath(`/tracker/players/${encodeURIComponent(id)}/track?points=300`));
+            if (!data.count) {
+                App.toast('Трек пуст', 'Для этого игрока пока нет точек.', 'warn');
+                return;
+            }
+            await showTrackOnMap({ id, name: name || id, points: data.points, count: data.count });
+        } catch (error) {
+            App.toast('Не удалось получить трек', error.message, 'error');
+        }
+    }
+
+    /**
+     * Обновляет панель трека: имя игрока, видимость кнопок и подпись
+     * переключателя. Панель видна только когда трек выбран.
+     */
+    function updateTrackControls() {
+        const bar = el('mapTrackBar');
+        if (!bar) return;
+
+        bar.classList.toggle('hidden', !playerTrack);
+
+        if (!playerTrack) return;
+
+        text('mapTrackName', playerTrack.name || playerTrack.id);
+
+        // Время начала и конца трека — сколько назад он записан.
+        const range = el('mapTrackRange');
+        if (range) {
+            const points = playerTrack.points ?? [];
+            const first = points[0]?.at;
+            const last = points[points.length - 1]?.at;
+            range.textContent = first && last
+                ? `${fmtTime(first)} → ${fmtTime(last)}`
+                : '';
+        }
+
+        const toggle = el('mapTrackToggle');
+        if (toggle) toggle.textContent = playerTrack.visible ? 'Скрыть трек' : 'Показать трек';
+    }
+
+    /** Включает/выключает показ трека, не убирая данные. */
+    function toggleTrack() {
+        if (!playerTrack) return;
+        playerTrack.visible = !playerTrack.visible;
+        updateTrackControls();
+        drawMapOverlay();
+    }
+
+    /** Убирает трек с карты. */
+    function clearTrack() {
+        playerTrack = null;
+        updateTrackControls();
+        drawMapOverlay();
     }
 
     /** Последние события игрока (смерти, убийства, чат) в карточке. */
@@ -1712,7 +1855,11 @@ const Players = (() => {
     let liveMap = null;
     let mapInfo = null;
     let mapReady = false;
+    let mapInfoPromise = null;
     let mapControlsBound = false;
+
+    // Трек, наложенный на живую карту: { id, name, points:[{x,z}], last:{x,z} }.
+    let playerTrack = null;
 
     // Фильтры слоёв карты. Ключ — категория, значение — показывать ли.
     const FILTERS_KEY = 'dayzpulse.map.filters';
@@ -1741,17 +1888,82 @@ const Players = (() => {
         try { localStorage.setItem(FILTERS_KEY, JSON.stringify(mapFilters)); } catch { /* игнорируем */ }
     }
 
-    // Цвета и группировка объектов мира (совпадают с подписями в интерфейсе).
-    const OBJECT_STYLE = {
-        barrel: { color: '#8b949e', shape: 'barrel' },
-        tent: { color: '#a371f7', shape: 'tent' },
-        crate: { color: '#35b8c4', shape: 'crate' },
-        stash: { color: '#db61a2', shape: 'crate' },
-        flag: { color: '#e3b341', shape: 'flag' },
-        watchtower: { color: '#c98b39', shape: 'crate' },
-        fence: { color: '#6e7681', shape: 'fence' },
-        build: { color: '#6e7681', shape: 'crate' }
+    /**
+     * Тип транспорта по классу DayZ. Возвращает { key, label, icon, scale }:
+     * у каждого класса-семейства своя иконка (машина, вертолёт, лодка…),
+     * а не одинаковый квадратик.
+     */
+    function vehicleArchetype(className) {
+        const c = String(className || '').toLowerCase();
+        const has = (...parts) => parts.some((p) => c.includes(p));
+
+        if (has('boat', 'ship', 'sailing', 'raft', 'lhd', 'fishingship')) return { key: 'boat', label: 'Лодка', icon: '⛵', scale: 0.9 };
+        if (has('helicopter', 'heli', 'mh6', 'uh1y', 'mi8', 'uh60')) return { key: 'heli', label: 'Вертолёт', icon: '🚁', scale: 1.05 };
+        if (has('truck', 'v3s', 'kamaz', 'm3s', 'bus', 'ural')) return { key: 'truck', label: 'Грузовик', icon: '🚚', scale: 1.15 };
+        if (has('motorcycle', 'motorbike', 'moto')) return { key: 'moto', label: 'Мотоцикл', icon: '🏍️', scale: 0.75 };
+        if (has('bicycle', 'bike')) return { key: 'bike', label: 'Велосипед', icon: '🚲', scale: 0.7 };
+        if (has('tractor', 'harvester')) return { key: 'tractor', label: 'Трактор', icon: '🚜', scale: 1 };
+        if (has('sedan', 'hatchback', 'suv', 'offroad', 'car', 'lada', 'golf', 'volha', 'van', 'police', 'ambulance', 'fire', 'olga', 'niva', 'sarka')) {
+            return { key: 'car', label: 'Автомобиль', icon: '🚗', scale: 1 };
+        }
+        return { key: 'vehicle', label: 'Транспорт', icon: '🚙', scale: 1 };
+    }
+
+    /** Иконка объекта мира по его категории (единый стиль с транспортом). */
+    const OBJECT_ICON = {
+        barrel: '🛢️',
+        tent: '⛺',
+        crate: '📦',
+        stash: '🗄️',
+        flag: '🚩',
+        watchtower: '🗼',
+        fence: '🧱',
+        build: '🧱'
     };
+
+    /** Ставит иконку (эмодзи) в SVG-группу с невидимой зоной для подсказок. */
+    function placeMapIcon(ns, layer, at, glyph, size) {
+        const group = document.createElementNS(ns, 'g');
+
+        const text = document.createElementNS(ns, 'text');
+        text.setAttribute('x', at.x);
+        text.setAttribute('y', at.y);
+        text.setAttribute('text-anchor', 'middle');
+        text.setAttribute('dominant-baseline', 'central');
+        text.setAttribute('font-size', String(size));
+        text.setAttribute('style', 'pointer-events:none;user-select:none');
+        text.textContent = glyph;
+        group.appendChild(text);
+
+        // Прозрачная зона под иконкой: по ней работает наведение/клик и
+        // показывается <title>, не мешая отрисовке самого эмодзи.
+        const hit = document.createElementNS(ns, 'circle');
+        hit.setAttribute('cx', at.x);
+        hit.setAttribute('cy', at.y);
+        hit.setAttribute('r', String(Math.max(8, size * 0.6)));
+        hit.setAttribute('fill', 'transparent');
+        group.appendChild(hit);
+
+        layer.appendChild(group);
+        return group;
+    }
+
+    // Трек может выходить за экран: подбираем зум и центр так, чтобы линия
+    // целиком помещалась в контейнере.
+    function fitTrackView(track) {
+        if (!liveMap || !track.points.length) return;
+
+        let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+        for (const point of track.points) {
+            minX = Math.min(minX, point.x); maxX = Math.max(maxX, point.x);
+            minZ = Math.min(minZ, point.z); maxZ = Math.max(maxZ, point.z);
+        }
+
+        const span = Math.max(maxX - minX, maxZ - minZ, 60);
+        const need = Math.max(liveMap.containerWidth, liveMap.containerHeight) * 0.85;
+        const ideal = Math.log2(need / (256 * (span / liveMap.size)));
+        liveMap.setView((minX + maxX) / 2, (minZ + maxZ) / 2, ideal);
+    }
 
     /** Создаёт карту один раз и подключает элементы управления. */
     function initLiveMap() {
@@ -1768,17 +1980,26 @@ const Players = (() => {
         ensureMapInfo();
     }
 
-    /** Загружает метаданные карты (размер мира, тип, доступность). */
-    async function ensureMapInfo() {
-        if (mapReady || !liveMap) return;
-        mapReady = true;
+    /**
+     * Загружает метаданные карты (размер мира, тип, доступность).
+     * Возвращает общий промис, поэтому параллельные вызовы ждут одну загрузку.
+     */
+    function ensureMapInfo() {
+        if (mapInfoPromise) return mapInfoPromise;
+        if (mapReady || !liveMap) return Promise.resolve(mapInfo);
 
+        mapReady = true;
+        mapInfoPromise = loadMapInfo().finally(() => { mapInfoPromise = null; });
+        return mapInfoPromise;
+    }
+
+    async function loadMapInfo() {
         try {
             mapInfo = await App.api(apiPath('/tracker/map/info'));
 
             if (!mapInfo.available) {
                 showMapNote('Для этой карты нет тайлов на xam.nu — показаны только позиции.');
-                return;
+                return mapInfo;
             }
 
             text('mapTitle', mapInfo.label || mapInfo.map || '');
@@ -1807,6 +2028,8 @@ const Players = (() => {
             mapReady = false;
             showMapNote('Не удалось загрузить карту: ' + error.message);
         }
+
+        return mapInfo;
     }
 
     function showMapNote(message) {
@@ -1846,6 +2069,17 @@ const Players = (() => {
         el('mapZoomOut')?.addEventListener('click', () => liveMap?.zoomBy(-1));
         el('mapReset')?.addEventListener('click', () => liveMap?.fit());
 
+        // Панель трека: показать/скрыть, целиком, убрать.
+        el('mapTrackToggle')?.addEventListener('click', toggleTrack);
+        el('mapTrackClose')?.addEventListener('click', clearTrack);
+        el('mapTrackFit')?.addEventListener('click', () => {
+            if (!playerTrack) return;
+            // Если трек был скрыт — включаем, иначе кнопка «целиком» выглядит мёртвой.
+            playerTrack.visible = true;
+            updateTrackControls();
+            fitTrackView(playerTrack);
+        });
+
         el('mapLayerBtn')?.addEventListener('click', () => {
             if (!liveMap || !mapInfo?.available) return;
             const next = liveMap.layer === 'topographic' ? 'satellite' : 'topographic';
@@ -1881,6 +2115,9 @@ const Players = (() => {
         const svg = el('liveMapSvg');
         if (!svg || !liveMap) return;
 
+        // Скрытый/схлопнутый контейнер: размеров нет — рисовать нечего.
+        if (!liveMap.hasSize) return;
+
         // SVG накрывает контейнер и работает в экранных координатах.
         svg.setAttribute('viewBox', `0 0 ${liveMap.containerWidth} ${liveMap.containerHeight}`);
         svg.setAttribute('preserveAspectRatio', 'none');
@@ -1888,11 +2125,13 @@ const Players = (() => {
         const players = el('liveMapPlayers');
         const vehicleLayer = el('liveMapVehicles');
         const objectLayer = el('liveMapObjects');
+        const trackLayer = el('mapTrackOverlay');
         if (!players || !vehicleLayer || !objectLayer) return;
 
         clear(players);
         clear(vehicleLayer);
         clear(objectLayer);
+        if (trackLayer) clear(trackLayer);
 
         const ns = 'http://www.w3.org/2000/svg';
         let aliveOnMap = 0;
@@ -1915,6 +2154,7 @@ const Players = (() => {
             group.setAttribute('opacity', player.stale ? '0.45' : '1');
 
             const color = player.alive ? '#3fb950' : '#e5534b';
+            const isTracked = !!playerTrack && playerTrack.id === player.id;
 
             const halo = document.createElementNS(ns, 'circle');
             halo.setAttribute('r', '13');
@@ -1931,6 +2171,16 @@ const Players = (() => {
             dot.addEventListener('click', () => openPlayer(player.id));
             group.appendChild(dot);
 
+            // У игрока, чей трек сейчас показан, — заметное кольцо.
+            if (isTracked) {
+                const ring = document.createElementNS(ns, 'circle');
+                ring.setAttribute('r', '15');
+                ring.setAttribute('fill', 'none');
+                ring.setAttribute('stroke', '#4a90d9');
+                ring.setAttribute('stroke-width', '2.5');
+                group.appendChild(ring);
+            }
+
             const title = document.createElementNS(ns, 'title');
             title.textContent = `${player.name} · ${Math.round(player.health)} HP · ${fmtCoord(player.pos.x)}:${fmtCoord(player.pos.z)}`;
             group.appendChild(title);
@@ -1938,28 +2188,20 @@ const Players = (() => {
             players.appendChild(group);
         }
 
-        // --- транспорт ---
+        // --- транспорт (иконка по типу: машина, вертолёт, лодка…) ---
         if (mapFilters.vehicle) {
             for (const vehicle of liveVehicles) {
                 const at = mapToScreen(vehicle.x, vehicle.z);
                 if (!at) continue;
                 vehiclesOnMap++;
 
-                const rect = document.createElementNS(ns, 'rect');
-                rect.setAttribute('x', at.x - 5);
-                rect.setAttribute('y', at.y - 5);
-                rect.setAttribute('width', '10');
-                rect.setAttribute('height', '10');
-                rect.setAttribute('rx', '2');
-                rect.setAttribute('fill', '#d9a94a');
-                rect.setAttribute('fill-opacity', '0.9');
-                rect.setAttribute('stroke', '#0a0e13');
-                rect.setAttribute('stroke-width', '1.5');
+                const arche = vehicleArchetype(vehicle.class);
+                const node = placeMapIcon(ns, vehicleLayer, at, arche.icon, 17 * arche.scale);
 
                 const title = document.createElementNS(ns, 'title');
-                title.textContent = `${vehicle.class} · топливо ${Math.round((vehicle.fuel ?? 0) * 100)}%`;
-                rect.appendChild(title);
-                vehicleLayer.appendChild(rect);
+                title.textContent = `${arche.label} · ${vehicle.class} · ` +
+                    `топливо ${Math.round(vehicle.fuel ?? 0)}% · ${fmtCoord(vehicle.x)}:${fmtCoord(vehicle.z)}`;
+                node.appendChild(title);
             }
         }
 
@@ -1973,15 +2215,17 @@ const Players = (() => {
             if (!at) continue;
             objectsOnMap++;
 
-            const style = OBJECT_STYLE[kind] ?? OBJECT_STYLE.build;
-            const node = buildObjectMarker(ns, style, at);
+            const glyph = OBJECT_ICON[kind] ?? OBJECT_ICON.build;
+            const node = placeMapIcon(ns, objectLayer, at, glyph, 15);
 
             const title = document.createElementNS(ns, 'title');
             title.textContent = `${object.label || kind}${object.class ? ' · ' + object.class : ''}` +
                 ` · ${fmtCoord(object.x)}:${fmtCoord(object.z)}`;
             node.appendChild(title);
-            objectLayer.appendChild(node);
         }
+
+        // --- трек выбранного игрока (под маркерами игроков, поверх объектов) ---
+        drawTrack(ns, trackLayer);
 
         // Сводка под картой.
         const counts = el('mapCounts');
@@ -1992,64 +2236,87 @@ const Players = (() => {
                 `транспорта ${vehiclesOnMap}`,
                 `объектов ${objectsOnMap}`
             ].filter(Boolean);
+            if (playerTrack && playerTrack.visible) {
+                parts.push(`трек: ${playerTrack.name || playerTrack.id} (${playerTrack.points.length} точек)`);
+            }
             counts.textContent = 'на карте: ' + parts.join(' · ');
         }
     }
 
-    /** Рисует фигурку объекта мира по его типу. */
-    function buildObjectMarker(ns, style, at) {
-        if (style.shape === 'barrel') {
-            const c = document.createElementNS(ns, 'circle');
-            c.setAttribute('cx', at.x);
-            c.setAttribute('cy', at.y);
-            c.setAttribute('r', '4');
-            c.setAttribute('fill', style.color);
-            c.setAttribute('fill-opacity', '0.9');
-            c.setAttribute('stroke', '#0a0e13');
-            c.setAttribute('stroke-width', '1.2');
-            return c;
+    /** Рисует линию перемещений выбранного игрока и подписи начала/конца. */
+    function drawTrack(ns, layer) {
+        if (!layer || !playerTrack || !playerTrack.visible) return;
+        if (playerTrack.points.length < 2) return;
+
+        const screen = [];
+        for (const point of playerTrack.points) {
+            const at = mapToScreen(point.x, point.z);
+            if (at) screen.push(at);
         }
 
-        if (style.shape === 'tent') {
-            const p = document.createElementNS(ns, 'polygon');
-            p.setAttribute('points', `${at.x},${at.y - 5} ${at.x - 5},${at.y + 4} ${at.x + 5},${at.y + 4}`);
-            p.setAttribute('fill', style.color);
-            p.setAttribute('fill-opacity', '0.9');
-            p.setAttribute('stroke', '#0a0e13');
-            p.setAttribute('stroke-width', '1.2');
-            return p;
-        }
+        if (screen.length < 2) return;
 
-        if (style.shape === 'flag') {
-            const g = document.createElementNS(ns, 'g');
-            const pole = document.createElementNS(ns, 'line');
-            pole.setAttribute('x1', at.x);
-            pole.setAttribute('y1', at.y - 6);
-            pole.setAttribute('x2', at.x);
-            pole.setAttribute('y2', at.y + 5);
-            pole.setAttribute('stroke', '#0a0e13');
-            pole.setAttribute('stroke-width', '1.4');
-            g.appendChild(pole);
+        const polyline = document.createElementNS(ns, 'polyline');
+        polyline.setAttribute('points', screen.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' '));
+        polyline.setAttribute('fill', 'none');
+        polyline.setAttribute('stroke', '#4a90d9');
+        polyline.setAttribute('stroke-width', '2.5');
+        polyline.setAttribute('stroke-linejoin', 'round');
+        polyline.setAttribute('stroke-linecap', 'round');
+        polyline.setAttribute('stroke-opacity', '0.9');
+        polyline.setAttribute('style', 'pointer-events:none');
+        layer.appendChild(polyline);
 
-            const flag = document.createElementNS(ns, 'polygon');
-            flag.setAttribute('points', `${at.x},${at.y - 6} ${at.x + 6},${at.y - 4} ${at.x},${at.y - 1}`);
-            flag.setAttribute('fill', style.color);
-            g.appendChild(flag);
-            return g;
-        }
+        // Начало трека — зелёный кружок.
+        const start = screen[0];
+        const startDot = document.createElementNS(ns, 'circle');
+        startDot.setAttribute('cx', start.x);
+        startDot.setAttribute('cy', start.y);
+        startDot.setAttribute('r', '4');
+        startDot.setAttribute('fill', '#3fb950');
+        startDot.setAttribute('stroke', '#0a0e13');
+        startDot.setAttribute('stroke-width', '1.5');
+        layer.appendChild(startDot);
 
-        // По умолчанию — квадратик (ящики, схроны, башни, заборы).
-        const rect = document.createElementNS(ns, 'rect');
-        rect.setAttribute('x', at.x - 4);
-        rect.setAttribute('y', at.y - 4);
-        rect.setAttribute('width', '8');
-        rect.setAttribute('height', '8');
-        rect.setAttribute('rx', '1.5');
-        rect.setAttribute('fill', style.color);
-        rect.setAttribute('fill-opacity', '0.9');
-        rect.setAttribute('stroke', '#0a0e13');
-        rect.setAttribute('stroke-width', '1.2');
-        return rect;
+        drawTrackEnd(ns, layer, screen[screen.length - 1]);
+    }
+
+    /** Маркер конца трека: точка + стрелка направления + подпись. */
+    function drawTrackEnd(ns, layer, end) {
+        if (!end) return;
+
+        const color = '#4a90d9';
+        const g = document.createElementNS(ns, 'g');
+        g.setAttribute('transform', `translate(${end.x} ${end.y})`);
+        g.setAttribute('style', 'pointer-events:none');
+
+        const halo = document.createElementNS(ns, 'circle');
+        halo.setAttribute('r', '11');
+        halo.setAttribute('fill', color);
+        halo.setAttribute('fill-opacity', '0.22');
+        g.appendChild(halo);
+
+        const dot = document.createElementNS(ns, 'circle');
+        dot.setAttribute('r', '5');
+        dot.setAttribute('fill', color);
+        dot.setAttribute('stroke', '#0a0e13');
+        dot.setAttribute('stroke-width', '2');
+        g.appendChild(dot);
+
+        const label = document.createElementNS(ns, 'text');
+        label.setAttribute('x', '0');
+        label.setAttribute('y', '-12');
+        label.setAttribute('text-anchor', 'middle');
+        label.setAttribute('font-size', '10');
+        label.setAttribute('font-weight', '700');
+        label.setAttribute('fill', color);
+        label.setAttribute('stroke', '#0a0e13');
+        label.setAttribute('stroke-width', '2.5');
+        label.setAttribute('paint-order', 'stroke');
+        label.textContent = 'сейчас';
+        g.appendChild(label);
+
+        layer.appendChild(g);
     }
 
     /** Игровые метры → экранные пиксели контейнера карты. */
@@ -2522,6 +2789,9 @@ const Players = (() => {
     return {
         start, stop, bind, reset, reloadMap, loadConfig, loadLive, loadDatabase,
         loadChat, loadViolations, loadKills, loadCommands, loadEvents,
+
+        // Показ трека на живой карте (кнопка в карточке игрока и строке списка).
+        showTrackOnMap, showPlayerTrackById,
 
         // Общие помощники для визуального редактора наборов (loadouts.js).
         livePlayers: () => livePlayers,

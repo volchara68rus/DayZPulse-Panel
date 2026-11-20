@@ -371,7 +371,22 @@ const Mods = (() => {
 
         try {
             const result = await App.api(apiPath('/mods/install'), { method: 'POST', body });
-            App.toast('Установка', result.note ?? `Готово: ${result.installed}/${result.total}.`, 'info', 6000);
+            const failed = (result.results ?? []).filter((r) => !r.ok);
+
+            if (result.note) {
+                App.toast('Установка', result.note, 'info', 6000);
+            } else if (failed.length) {
+                // Показываем причину, иначе при ошибке качалки видно только «0/N».
+                const first = failed[0];
+                App.toast(
+                    'Мод не установлен',
+                    `${first.name || 'Мод'}: ${first.error || 'неизвестная ошибка'}` +
+                        (failed.length > 1 ? ` (ещё ${failed.length - 1})` : ''),
+                    'error', 12000);
+            } else {
+                App.toast('Установка', `Готово: ${result.installed}/${result.total}.`, 'info', 6000);
+            }
+
             await load();
         } catch (error) {
             App.toast('Не удалось установить', error.message, 'error', 9000);

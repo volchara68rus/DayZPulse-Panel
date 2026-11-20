@@ -793,8 +793,12 @@ public static class TrackerEndpoints
         {
             var runtime = Require(registry, serverId);
             var now = DateTimeOffset.Now;
-            var fromAt = ParseDate(from) ?? now.AddHours(-1);
-            var toAt = ParseDate(to) ?? now;
+
+            // Окно по умолчанию — широкое: трек должен быть доступен и для
+            // игрока в оффлайне (данные могут быть старше часа). Точный
+            // горизонт задаёт срок хранения в базе.
+            var fromAt = ParseDate(from) ?? now.AddDays(-90);
+            var toAt = ParseDate(to) ?? now.AddDays(1);
             var samples = runtime.Tracker.Track(id, fromAt, toAt, Math.Clamp(points ?? 600, 20, 5000));
 
             return Results.Ok(new
@@ -1378,6 +1382,12 @@ public static class TrackerEndpoints
             };
 
             settings.UpdateServer(serverId, p => p.ModList.Add(mod));
+
+            // Синхронизируем рантайм: иначе установка читает устаревший
+            // профиль и не находит только что добавленный мод.
+            mods.RebuildLaunchMods(serverId);
+            registry.Sync();
+
             audit.Write(Actor(ctx), "mod.add.workshop", workshopId, null);
             return Results.Ok(new { ok = true, id = mod.Id });
         });

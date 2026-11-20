@@ -46,6 +46,15 @@ class TileMap {
         this._bindPointer();
         this._bindWheel();
         window.addEventListener('resize', () => this.render());
+
+        // Свёртывание/развёртывание боковой панели меняет ширину контейнера,
+        // но окно при этом не меняется — событие resize не срабатывает.
+        // ResizeObserver ловит изменение самого контейнера, поэтому тайлы и
+        // маркеры остаются синхронными (иначе координаты «уезжали»).
+        if (typeof ResizeObserver !== 'undefined') {
+            this._resizeObserver = new ResizeObserver(() => this.invalidateSize());
+            this._resizeObserver.observe(wrap);
+        }
     }
 
     /** Настраивает карту: размер мира, максимальный зум, источник тайлов. */
@@ -111,6 +120,9 @@ class TileMap {
 
     /** Центрирует и подбирает зум так, чтобы карта помещалась целиком. */
     fit() {
+        // Скрытый контейнер: размеров нет — отложим до появления размера.
+        if (!this.hasSize) return;
+
         const need = Math.max(this.containerWidth, this.containerHeight);
         const ideal = Math.log2(need / 256);
         this.zoom = Math.max(this.minZoom, Math.min(this.maxZoom, Math.floor(ideal)));
@@ -153,11 +165,23 @@ class TileMap {
 
     /* ------------------------------------------------------------ отрисовка */
 
+    /** Есть ли у контейнера ненулевой размер (иначе рендер только портит вид). */
+    get hasSize() {
+        return (this.wrap.clientWidth || 0) > 0 && (this.wrap.clientHeight || 0) > 0;
+    }
+
     render() {
         if (!this.tileUrl) return;
 
         const w = this.containerWidth;
         const h = this.containerHeight;
+
+        // Скрытый или схлопнутый контейнер: карта невидима, размеры равны 0.
+        // Рендер с нулевыми размерами запомнил бы _renderedZoom и «вычислил»
+        // центр при появлении размера, уводя вид в угол — поэтому просто
+        // ничего не делаем и повторим, когда размер появится.
+        if (!this.hasSize) return;
+
         const worldPx = this.worldPx;
         const center = this.centerPx;
         const offsetX = w / 2 - center.x;

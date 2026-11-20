@@ -837,7 +837,7 @@
           <table class="table">
             <thead>
             <tr><th></th><th>Имя</th><th>SteamID64</th><th>Последний вход</th><th>Сессий</th>
-              <th>Наиграно</th><th>Убийств</th><th>Смертей</th><th>K/D</th></tr>
+              <th>Наиграно</th><th>Убийств</th><th>Смертей</th><th>K/D</th><th></th></tr>
             </thead>
             <tbody id="dbRows"></tbody>
           </table>
@@ -864,12 +864,22 @@
           <svg id="liveMapSvg" viewBox="0 0 15360 15360" preserveAspectRatio="xMidYMid meet" class="live-map">
             <g id="liveMapVehicles"></g>
             <g id="liveMapObjects"></g>
+            <g id="mapTrackOverlay"></g>
             <g id="liveMapPlayers"></g>
           </svg>
           <div class="map-zoom">
             <button type="button" id="mapZoomIn" title="Приблизить">+</button>
             <button type="button" id="mapZoomOut" title="Отдалить">−</button>
             <button type="button" id="mapReset" title="К центру">⤢</button>
+          </div>
+
+          <!-- Панель трека: показывается, когда выбран трек игрока. -->
+          <div class="map-trackbar hidden" id="mapTrackBar">
+            <span class="tb-name" id="mapTrackName">—</span>
+            <span class="tb-range muted" id="mapTrackRange"></span>
+            <button type="button" class="tb-btn" id="mapTrackToggle" title="Показать/скрыть трек">Скрыть трек</button>
+            <button type="button" class="tb-btn" id="mapTrackFit" title="Показать трек целиком">⤓ Целиком</button>
+            <button type="button" class="tb-btn" id="mapTrackClose" title="Убрать трек">✕</button>
           </div>
 
           <!-- Фильтры слоёв карты -->
@@ -898,7 +908,7 @@
         <div class="row" style="margin-top:12px;gap:18px">
           <span class="muted" style="font-size:12px"><span class="map-key" style="background:#3fb950"></span> игрок жив</span>
           <span class="muted" style="font-size:12px"><span class="map-key" style="background:#e5534b"></span> игрок мёртв</span>
-          <span class="muted" style="font-size:12px"><span class="map-key" style="background:#d9a94a"></span> транспорт</span>
+          <span class="muted" style="font-size:12px">🚗 🚁 ⛵ транспорт по типу</span>
           <span class="muted" style="font-size:12px" id="mapCounts"></span>
           <span class="muted" style="font-size:12px;margin-left:auto" id="mapAttribution">Карта: XAM · dayz.xam.nu</span>
         </div>
@@ -1767,9 +1777,7 @@
         <h3 class="pm-h">Последние события</h3>
         <div id="playerModalEvents" class="pm-events"></div>
 
-        <h3 class="pm-h">
-          Трек перемещений <span class="muted" id="playerModalTrackCount" style="text-transform:none;letter-spacing:0"></span>
-        </h3>
+        <h3 class="pm-h">Трек перемещений</h3>
         <div id="playerModalTrack" class="track-box"></div>
 
         <h3 class="pm-h">Заметка администратора</h3>
