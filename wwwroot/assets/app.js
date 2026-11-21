@@ -1039,16 +1039,6 @@ function connectLive() {
                 applyServerInstallPush(message.data);
                 break;
 
-            case 'web-ui':
-                // Панель нашла обновление веб-части: отмечаем точку и
-                // показываем уведомление с кнопками.
-                if (message.data?.available && !message.data?.upToDate) {
-                    $('webUiDot')?.classList.add('on');
-                    if (currentView === 'service') loadWebUi();
-                    showWebUiUpdateNotice(message.data.remoteVersion);
-                }
-                break;
-
             case 'panel-update':
                 // Доступно обновление самой панели: отмечаем точку и, если
                 // открыт раздел службы, обновляем карточку.
@@ -1130,7 +1120,7 @@ function loadCurrentView() {
         }
     }
     if (name === 'schedule') loadSchedule();
-    if (name === 'service') { loadService(); loadApplicationInfo(); loadWebUi(); loadPanelUpdate(); }
+    if (name === 'service') { loadService(); loadApplicationInfo(); loadPanelUpdate(); }
     if (name === 'settings') loadSettings();
     if (name === 'security') { loadSecurity(); loadAudit(); }
     if (name === 'players') { Players.start(); Players.loadConfig(); Players.loadDatabase(); if (typeof Loadouts !== 'undefined') Loadouts.load(); }
@@ -4409,168 +4399,6 @@ $('noteInput')?.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
         event.preventDefault();
         addNote();
-    }
-});
-
-/* -------------------------------------------- веб-интерфейс (обновление) */
-
-let webUiPollTimer = null;
-
-// Ссылка на одно залипающее уведомление об обновлении: повторные проверки
-// не должны плодить их десятками.
-let webUiNotice = null;
-
-/** Показывает залипающее уведомление об обновлении веб-части с кнопками. */
-function showWebUiUpdateNotice() {
-    if (webUiNotice && document.body.contains(webUiNotice)) {
-        return;
-    }
-
-    webUiNotice = toast('Доступно обновление веб-интерфейса',
-        'Обновите панель, чтобы применить новую вёрстку и скрипты. Служба останавливаться не будет.',
-        'info', 0, {
-            sticky: true,
-            actions: [
-                {
-                    label: 'Обновить', kind: 'primary',
-                    onClick: () => installWebUiUpdate()
-                },
-                {
-                    label: 'Позже',
-                    onClick: (_button, box) => box.remove()
-                }
-            ]
-        });
-}
-
-/** Запускает установку обновления веб-части с прогрессом. */
-async function installWebUiUpdate() {
-    try {
-        paintWebUiProgress(0, 'подготовка');
-        startWebUiPoll();
-        await api('/web-ui/install', { method: 'POST' });
-    } catch (error) {
-        clearInterval(webUiPollTimer);
-        webUiPollTimer = null;
-        $('webUiProgress')?.classList.add('hidden');
-        toast('Не удалось обновить', error.message, 'error', 9000);
-        loadWebUi();
-    }
-}
-
-/** Загружает состояние веб-части и показывает доступность обновления. */
-async function loadWebUi() {
-    const info = $('webUiInfo');
-    if (!info) return;
-
-    try {
-        const data = await api('/web-ui');
-
-        const updateAvailable = data.available && !data.upToDate;
-
-        // Статус словами — без номеров версий.
-        const status = !data.available
-            ? 'сайт недоступен'
-            : updateAvailable ? 'доступно обновление' : 'актуальная версия';
-
-        const rows = [
-            ['Веб-интерфейс', data.overridden ? 'обновлённый' : 'встроенный'],
-            ['Обновления', status],
-            ['Источник', data.baseUrl || '—']
-        ];
-
-        info.textContent = '';
-        for (const [key, value] of rows) {
-            const dt = document.createElement('dt');
-            dt.textContent = key;
-            const dd = document.createElement('dd');
-            dd.textContent = value ?? '—';
-            info.appendChild(dt);
-            info.appendChild(dd);
-        }
-
-        $('webUiInstall').disabled = !updateAvailable || data.busy;
-        $('webUiInstall').textContent = updateAvailable
-            ? 'Обновить веб-часть'
-            : 'Обновление не требуется';
-        $('webUiDot').classList.toggle('on', updateAvailable);
-        $('webUiReset').disabled = !data.overridden;
-
-        const autoCheck = $('webUiAutoCheck');
-        if (autoCheck && document.activeElement !== autoCheck) autoCheck.checked = !!data.autoCheck;
-
-        if (data.busy) {
-            paintWebUiProgress(data.progress, data.phase);
-            startWebUiPoll();
-        }
-    } catch (error) {
-        info.textContent = 'Не удалось получить состояние: ' + error.message;
-    }
-}
-
-function paintWebUiProgress(percent, phase) {
-    $('webUiProgress')?.classList.remove('hidden');
-    setText('webUiPhase', phase || 'обновление');
-    setText('webUiPercent', (percent ?? 0) + '%');
-    if ($('webUiFill')) $('webUiFill').style.width = (percent ?? 0) + '%';
-}
-
-function startWebUiPoll() {
-    if (webUiPollTimer) return;
-    webUiPollTimer = setInterval(async () => {
-        try {
-            const data = await api('/web-ui');
-            paintWebUiProgress(data.progress, data.phase);
-
-            if (!data.busy) {
-                clearInterval(webUiPollTimer);
-                webUiPollTimer = null;
-                $('webUiProgress')?.classList.add('hidden');
-                await loadWebUi();
-                // Скрипты и стили изменились: перезагружаем страницу, чтобы
-                // браузер взял новую веб-часть.
-                toast('Веб-часть обновлена', 'Перезагружаем страницу…', 'info', 2500);
-                setTimeout(() => window.location.reload(), 1200);
-            }
-        } catch {
-            clearInterval(webUiPollTimer);
-            webUiPollTimer = null;
-        }
-    }, 700);
-}
-
-$('webUiCheck')?.addEventListener('click', async () => {
-    const button = $('webUiCheck');
-    button.disabled = true;
-    button.textContent = 'Проверка…';
-    await loadWebUi();
-    button.disabled = false;
-    button.textContent = 'Проверить обновление';
-});
-
-$('webUiInstall')?.addEventListener('click', () => {
-    askConfirm('Скачать и установить обновление веб-интерфейса? Служба останавливаться не будет.',
-        installWebUiUpdate, 'Обновить');
-});
-
-$('webUiReset')?.addEventListener('click', () => {
-    askConfirm('Удалить обновлённую веб-часть и вернуться к встроенной версии?',
-        async () => {
-            try {
-                await api('/web-ui', { method: 'DELETE' });
-                loadWebUi();
-            } catch (error) {
-                toast('Не удалось', error.message, 'error');
-            }
-        }, 'Вернуть встроенную');
-});
-
-$('webUiAutoCheck')?.addEventListener('change', async (event) => {
-    try {
-        await api('/web-ui/autocheck', { method: 'PUT', body: { enabled: event.target.checked } });
-    } catch (error) {
-        toast('Не удалось сохранить', error.message, 'error');
-        event.target.checked = !event.target.checked;
     }
 });
 

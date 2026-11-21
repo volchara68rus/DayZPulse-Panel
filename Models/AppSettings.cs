@@ -8,7 +8,6 @@ namespace DayZPulse.Models;
 public sealed class AppSettings
 {
     public WebSettings Web { get; set; } = new();
-    public WebUiSettings WebUi { get; set; } = new();
     public PanelUpdateSettings PanelUpdate { get; set; } = new();
     public AuthSettings Auth { get; set; } = new();
     public LoggingSettings Logging { get; set; } = new();
@@ -247,25 +246,7 @@ public sealed class WebSettings
 }
 
 /// <summary>
-/// Обновляемая веб-часть панели (вёрстка, стили, скрипты). Обновляется
-/// отдельно от исполняемого файла: скачивается с сайта и кладётся в каталог
-/// данных, откуда панель отдаёт статику в приоритете над встроенной копией.
-/// </summary>
-public sealed class WebUiSettings
-{
-    /// <summary>Версия установленной веб-части. Пусто — используется встроенная.</summary>
-    public string Version { get; set; } = "";
-
-    /// <summary>Когда веб-часть обновлялась в последний раз.</summary>
-    public DateTimeOffset? UpdatedAt { get; set; }
-
-    /// <summary>Проверять обновления веб-части автоматически при запуске.</summary>
-    public bool AutoCheck { get; set; } = true;
-}
-
-/// <summary>
-/// Обновление самой панели (исполняемые файлы), отдельно от веб-части и
-/// установщика. Веб-часть обновляется своим механизмом, здесь — только код.
+/// Обновление самой панели (код и веб-часть) без установщика.
 /// </summary>
 public sealed class PanelUpdateSettings
 {

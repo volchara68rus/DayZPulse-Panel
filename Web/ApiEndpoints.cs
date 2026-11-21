@@ -403,20 +403,12 @@ public static class ApiEndpoints
 
         // --------------------------------------------------------------- система
 
-        api.MapGet("/system/info", (ServerRegistry registry, ConsoleHub hub, SettingsStore settings,
-            DayZPulse.Web.WebUiUpdateService webUi) => Results.Ok(new
+        api.MapGet("/system/info", (ServerRegistry registry, ConsoleHub hub, SettingsStore settings) => Results.Ok(new
         {
             host = SystemInfo.Snapshot(),
             servers = registry.Summary(),
             consoleClients = hub.ClientCount,
             version = typeof(ApiEndpoints).Assembly.GetName().Version?.ToString(),
-            webUi = new
-            {
-                version = webUi.EffectiveVersion,
-                updatedAt = settings.Current.WebUi.UpdatedAt,
-                autoCheck = settings.Current.WebUi.AutoCheck,
-                overridden = webUi.HasOverride
-            },
             paths = new
             {
                 home = AppPaths.BaseDirectory,
@@ -599,65 +591,7 @@ public static class ApiEndpoints
             return Results.Ok(new { ok = removed });
         });
 
-        // ------------------------------------------- веб-часть (обновление отдельно)
-
-        // Состояние веб-части: локальная и удалённая версии.
-        api.MapGet("/web-ui", async (DayZPulse.Web.WebUiUpdateService webUi, SettingsStore settings,
-            CancellationToken ct) =>
-        {
-            var manifest = await webUi.FetchManifestAsync(ct);
-
-            return Results.Ok(new
-            {
-                baseUrl = webUi.BaseUrl,
-                localVersion = webUi.EffectiveVersion,
-                overridden = webUi.HasOverride,
-                localUpdatedAt = settings.Current.WebUi.UpdatedAt,
-                autoCheck = settings.Current.WebUi.AutoCheck,
-                remoteVersion = manifest?.Version,
-                remoteUpdated = manifest?.Updated,
-                remoteSize = manifest?.Size,
-                available = manifest is not null,
-                upToDate = manifest is not null && manifest.UpToDate,
-                busy = webUi.Busy,
-                progress = webUi.Percent,
-                phase = webUi.Phase
-            });
-        });
-
-        // Скачивание и установка веб-части.
-        api.MapPost("/web-ui/install", async (DayZPulse.Web.WebUiUpdateService webUi,
-            AuditLog audit, HttpContext ctx) =>
-        {
-            var result = await webUi.InstallAsync(ctx.RequestAborted);
-
-            if (!result.Success)
-            {
-                return Results.BadRequest(new { error = result.Error ?? "Не удалось обновить веб-часть." });
-            }
-
-            audit.Write(Actor(ctx), "webui.install", "версия " + (result.Version ?? "?"), null);
-            return Results.Ok(new { ok = true, version = result.Version });
-        });
-
-        // Откат к встроенной веб-части (удаление обновлённой копии).
-        api.MapDelete("/web-ui", (DayZPulse.Web.WebUiUpdateService webUi, AuditLog audit, HttpContext ctx) =>
-        {
-            webUi.Reset();
-            audit.Write(Actor(ctx), "webui.reset", null, null);
-            return Results.Ok(new { ok = true });
-        });
-
-        // Включение/выключение автоматической проверки веб-части.
-        api.MapPut("/web-ui/autocheck", (WebUiAutoCheckRequest request, SettingsStore settings,
-            AuditLog audit, HttpContext ctx) =>
-        {
-            settings.Update(s => s.WebUi.AutoCheck = request.Enabled);
-            audit.Write(Actor(ctx), "webui.autocheck", request.Enabled ? "вкл" : "выкл", null);
-            return Results.Ok(new { ok = true, enabled = request.Enabled });
-        });
-
-        // ------------------------------------- обновление панели (сам код, без установщика)
+        // ------------------------------------- обновление панели (код и веб-часть)
 
         // Состояние обновления панели: локальная/удалённая версии, объём загрузки.
         api.MapGet("/panel-update", async (DayZPulse.Web.PanelUpdateService panel, SettingsStore settings,
@@ -700,7 +634,7 @@ public static class ApiEndpoints
         });
 
         // Включение/выключение автоматической проверки обновления панели.
-        api.MapPut("/panel-update/autocheck", (WebUiAutoCheckRequest request, SettingsStore settings,
+        api.MapPut("/panel-update/autocheck", (AutoCheckRequest request, SettingsStore settings,
             AuditLog audit, HttpContext ctx) =>
         {
             settings.Update(s => s.PanelUpdate.AutoCheck = request.Enabled);
@@ -1434,7 +1368,7 @@ public static class ApiEndpoints
     public sealed record NoteRequest(string? Text);
     public sealed record PickFolderRequest(string? Path, string? Title);
     public sealed record MakeDirRequest(string? Parent, string? Name);
-    public sealed record WebUiAutoCheckRequest(bool Enabled);
+    public sealed record AutoCheckRequest(bool Enabled);
     public sealed record OwnerSetupRequest(string? Username, string? Password, string? PasswordConfirm,
         string? ServerDirectory, int? WebPort);
 }

@@ -35,19 +35,18 @@ public sealed record PanelUpdateState(
 public sealed record PanelInstallResult(bool Success, string? Version, string? Error, bool Restart = false);
 
 /// <summary>
-/// Обновление самой панели (файлы программы) по изменённым файлам, без
-/// установщика. Веб-часть (<c>wwwroot</c>) обновляется отдельно сервисом
-/// <see cref="WebUiUpdateService"/> — здесь её нет, чтобы механизмы не
-/// конфликтовали.
+/// Обновление самой панели — и файлов программы, и веб-части (<c>wwwroot</c>) —
+/// по изменённым файлам, без установщика. Это единый механизм: отдельного
+/// обновления веб-части больше нет (раньше два пути правили одни файлы).
 ///
 /// Как это работает:
 ///   1) читаем манифест <c>panel-files.json</c> и сравниваем хеши файлов с
-///      установленными;
-///   2) качаем только изменившиеся файлы (обычно это <c>DayZPulse.dll</c>
-///      и пара служебных — единицы мегабайт), сверяя контрольные суммы;
-///   3) раскладываем их в каталог-заготовку и запускаем помощник, который
-///      дождётся остановки панели, подменит файлы и запустит её снова —
-///      файлы заняты, пока процесс жив.
+///      текущими;
+///   2) качаем только изменившиеся (обычно это <c>DayZPulse.dll</c> и пара
+///      служебных — единицы мегабайт), сверяя контрольные суммы;
+///   3) файлы веб-части раскладываем сразу в каталог данных — они не заняты
+///      процессом и применяются без перезапуска; файлы программы ставит
+///      помощник после остановки панели (они заняты, пока процесс жив).
 ///
 /// Файлы раздаются по одному: <c>/download/panel/&lt;путь&gt;</c>.
 /// </summary>
@@ -167,11 +166,39 @@ public sealed class PanelUpdateService
         }
     }
 
+    /// <summary>Относится ли файл манифеста к веб-части (обновляется без перезапуска).</summary>
+    private static bool IsWebFile(string path) =>
+        path.StartsWith("wwwroot/", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Где лежит актуальная копия файла: обновлённая веб-часть (каталог данных)
+    /// имеет приоритет над встроенной рядом с программой — как и при отдаче
+    /// статики. Для файлов программы это просто каталог установки.
+    /// </summary>
+    private static string? ResolveCurrentPath(string rel)
+    {
+        var normalized = rel.Replace('\\', '/');
+
+        if (IsWebFile(normalized))
+        {
+            // В каталоге данных wwwroot лежит БЕЗ префикса «wwwroot/».
+            var inside = normalized["wwwroot/".Length..];
+            var overridePath = SafePath(AppPaths.WebUiOverride, inside);
+            if (overridePath is not null && File.Exists(overridePath))
+            {
+                return overridePath;
+            }
+
+            return SafePath(AppPaths.EmbeddedWebRoot, inside);
+        }
+
+        return SafePath(InstallDirectory, normalized);
+    }
+
     /// <summary>Файлы манифеста, которых нет локально или у которых другой хеш.</summary>
     public static IReadOnlyList<PanelFileInfo> ChangedFiles(PanelManifest manifest)
     {
         var result = new List<PanelFileInfo>();
-        var dir = InstallDirectory;
 
         foreach (var file in manifest.Files)
         {
@@ -180,13 +207,13 @@ public sealed class PanelUpdateService
                 continue;
             }
 
-            var target = SafePath(dir, file.Path);
-            if (target is null)
+            var current = ResolveCurrentPath(file.Path);
+            if (current is null)
             {
-                continue; // путь пытается выйти за каталог установки
+                continue; // путь пытается выйти за каталог
             }
 
-            if (!File.Exists(target) || !string.Equals(Hash(target), file.Sha256, StringComparison.OrdinalIgnoreCase))
+            if (!File.Exists(current) || !string.Equals(Hash(current), file.Sha256, StringComparison.OrdinalIgnoreCase))
             {
                 result.Add(file);
             }
@@ -260,14 +287,23 @@ public sealed class PanelUpdateService
                 return new PanelInstallResult(false, null, "Обновление не требуется.");
             }
 
+            // Веб-часть лежит в каталоге данных и не заблокирована процессом —
+            // её применяем сразу, без перезапуска. Файлы программы заняты, пока
+            // панель работает, поэтому их ставит помощник после выхода.
+            var webFiles = changed.Where(f => IsWebFile(f.Path)).ToArray();
+            var codeFiles = changed.Where(f => !IsWebFile(f.Path)).ToArray();
+
+            if (webFiles.Length == 0 && codeFiles.Length == 0)
+            {
+                return new PanelInstallResult(false, null, "Обновление не требуется.");
+            }
+
             var rawSize = changed.Sum(f => f.Size);
             var useArchive = manifest.Archive is not null && rawSize > ArchiveThreshold;
 
             var staging = StagingDirectory;
             if (Directory.Exists(staging)) Directory.Delete(staging, true);
             Directory.CreateDirectory(staging);
-
-            var changedPaths = changed.Select(f => f.Path).ToArray();
 
             if (useArchive)
             {
@@ -297,7 +333,7 @@ public sealed class PanelUpdateService
                     try { if (File.Exists(tmpZip)) File.Delete(tmpZip); } catch { /* занят */ }
                 }
 
-                // Ставим на подмену ровно изменившиеся файлы из распакованного архива.
+                // Проверяем, что в архиве есть все изменившиеся файлы.
                 foreach (var entry in changed)
                 {
                     var src = SafePath(staging, entry.Path);
@@ -343,11 +379,13 @@ public sealed class PanelUpdateService
                 }
             }
 
-            Percent = 95;
-            Phase = "Перезапуск";
-
-            // Помощник подменит файлы после остановки панели и запустит её снова.
-            ScheduleApplyAndRestart(changedPaths);
+            // Веб-часть применяем сейчас: она не заблокирована и живёт в каталоге
+            // данных. Кладём во временный каталог, затем подменяем атомарно.
+            if (webFiles.Length > 0)
+            {
+                Phase = "Обновление веб-части";
+                ApplyWebFiles(webFiles);
+            }
 
             var version = manifest.Version;
             _settings.Update(s =>
@@ -356,11 +394,27 @@ public sealed class PanelUpdateService
                 s.PanelUpdate.UpdatedAt = DateTimeOffset.Now;
             });
 
+            if (codeFiles.Length == 0)
+            {
+                // Обновилась только веб-часть — перезапуск не нужен.
+                Percent = 100;
+                Phase = "Готово";
+                _logger.LogInformation("Обновлена веб-часть панели до версии {Version} ({Count} файлов).",
+                    version, webFiles.Length);
+                return new PanelInstallResult(true, version, null, Restart: false);
+            }
+
+            Percent = 95;
+            Phase = "Перезапуск";
+
+            // Помощник подменит файлы программы после остановки панели.
+            ScheduleApplyAndRestart(codeFiles.Select(f => f.Path).ToArray());
+
             // Инициируем выход: помощник поднимет панель заново уже с новым кодом.
             _lifecycle.RequestApplyUpdate("обновление панели");
 
-            _logger.LogInformation("Подготовлено обновление панели до версии {Version} ({Count} файлов).",
-                version, changed.Count);
+            _logger.LogInformation("Подготовлено обновление панели до версии {Version} ({Code} файлов кода, {Web} веб-части).",
+                version, codeFiles.Length, webFiles.Length);
 
             return new PanelInstallResult(true, version, null, Restart: true);
         }
@@ -373,6 +427,32 @@ public sealed class PanelUpdateService
         finally
         {
             Busy = false;
+        }
+    }
+
+    /// <summary>
+    /// Применяет файлы веб-части в каталог-переопределение (каталог данных).
+    /// Он не занят процессом панели, поэтому файлы кладутся сразу, поверх
+    /// существующих: статику панель читает с диска на каждый запрос.
+    /// </summary>
+    private void ApplyWebFiles(IReadOnlyList<PanelFileInfo> webFiles)
+    {
+        var target = AppPaths.WebUiOverride;
+        Directory.CreateDirectory(target);
+
+        foreach (var file in webFiles)
+        {
+            var rel = file.Path["wwwroot/".Length..].Replace('/', Path.DirectorySeparatorChar);
+            var src = SafePath(StagingDirectory, file.Path);
+            var dst = SafePath(target, rel);
+
+            if (src is null || dst is null || !File.Exists(src))
+            {
+                throw new InvalidOperationException("Не найден файл веб-части: " + file.Path);
+            }
+
+            Directory.CreateDirectory(Path.GetDirectoryName(dst)!);
+            File.Copy(src, dst, overwrite: true);
         }
     }
 

@@ -71,8 +71,6 @@ public static class AppBootstrap
         builder.Services.AddSingleton<ServerLogService>();
         builder.Services.AddSingleton<LoadoutService>();
         builder.Services.AddSingleton<EngineMetricsService>();
-        builder.Services.AddSingleton<DayZPulse.Web.WebUiUpdateService>();
-        builder.Services.AddHostedService<DayZPulse.Web.WebUiCheckService>();
         builder.Services.AddSingleton<DayZPulse.Web.PanelUpdateService>();
         builder.Services.AddHostedService<DayZPulse.Web.PanelUpdateCheckService>();
 
@@ -174,18 +172,13 @@ public static class AppBootstrap
 
         var app = builder.Build();
 
-        // Если панель обновили через установщик, старая обновлённая веб-часть
-        // из каталога данных перекрыла бы новую встроенную вёрстку: отбрасываем
-        // её до того, как настроим отдачу статики (удалять каталог после
-        // создания провайдера файлов нельзя).
-        DayZPulse.Web.WebUiUpdateService.CleanupStaleOverride(settings, preLoggerFactory.CreateLogger("WebUi"));
-
-        // Веб-часть может быть обновлена отдельно от панели: тогда её копия
-        // лежит в каталоге данных (ProgramData), куда пишут без прав
-        // администратора. Каталог создаём заранее (пусть даже пустой), чтобы
-        // составной провайдер видел и файлы, появившиеся после обновления —
-        // иначе их подхватил бы только перезапуск. Обновлённые файлы имеют
-        // приоритет, отсутствующие берутся из встроенной копии.
+        // Веб-часть панели может быть обновлена вместе с кодом (см.
+        // PanelUpdateService): её копия лежит в каталоге данных (ProgramData),
+        // куда пишут без прав администратора. Каталог создаём заранее (пусть
+        // даже пустой), чтобы составной провайдер видел и файлы, появившиеся
+        // после обновления — иначе их подхватил бы только перезапуск.
+        // Обновлённые файлы имеют приоритет, отсутствующие берутся из встроенной
+        // копии рядом с программой.
         Directory.CreateDirectory(AppPaths.WebUiOverride);
 
         var webRootProviders = new List<Microsoft.Extensions.FileProviders.IFileProvider>

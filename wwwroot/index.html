@@ -1142,38 +1142,8 @@
         </label>
       </div>
 
-      <!-- Веб-часть обновляется отдельно от установщика: без прав
-           администратора и без остановки службы. -->
-      <div class="card" style="margin-top:16px">
-        <div class="qc-head">
-          <h2><span class="ic">🌐</span>Веб-интерфейс</h2>
-          <span class="qc-dirty" id="webUiDot" title="Есть обновление веб-части"></span>
-          <button class="btn ghost sm" id="webUiCheck" type="button">Проверить обновление</button>
-        </div>
-        <div class="help" style="margin-bottom:14px">
-          Вёрстка, стили и скрипты панели обновляются отдельно от программы — без
-          переустановки и остановки службы. После обновления просто обновите страницу.
-        </div>
-
-        <div class="kv" id="webUiInfo"></div>
-
-        <div class="node-progress hidden" id="webUiProgress" style="margin-top:14px">
-          <div class="node-progress-head">
-            <span class="node-progress-phase" id="webUiPhase">подготовка</span>
-            <span class="node-progress-value" id="webUiPercent">0%</span>
-          </div>
-          <div class="node-progress-rail"><i id="webUiFill" style="width:0%"></i></div>
-        </div>
-
-        <div class="row" style="margin-top:16px">
-          <button class="btn primary" id="webUiInstall" type="button" disabled>Обновить веб-часть</button>
-          <button class="btn ghost" id="webUiReset" type="button">Вернуть встроенную</button>
-        </div>
-
-        <label class="check" style="margin-top:14px">
-          <input type="checkbox" id="webUiAutoCheck"> Проверять автоматически при запуске панели
-        </label>
-      </div>
+      <!-- Веб-часть обновляется вместе с панелью (см. карточку «Обновление панели»
+           выше): отдельного механизма нет, чтобы два пути не правили одни файлы. -->
     </section>
 
     <!-- ==================== НАСТРОЙКИ ==================== -->
