@@ -1110,6 +1110,38 @@
         </div>
       </div>
 
+      <!-- Обновление самой панели (исполняемые файлы) — по изменённым файлам,
+           без установщика. Требует перезапуска, т.к. подменяются exe/dll. -->
+      <div class="card" style="margin-top:16px">
+        <div class="qc-head">
+          <h2><span class="ic">⬆</span>Обновление панели</h2>
+          <span class="qc-dirty" id="panelUpdateDot" title="Есть обновление панели"></span>
+          <button class="btn ghost sm" id="panelUpdateCheck" type="button">Проверить обновление</button>
+        </div>
+        <div class="help" style="margin-bottom:14px">
+          Программа панели обновляется по изменённым файлам — без установщика.
+          После загрузки панель перезапустится сама и применит новую версию.
+        </div>
+
+        <div class="kv" id="panelUpdateInfo"></div>
+
+        <div class="node-progress hidden" id="panelUpdateProgress" style="margin-top:14px">
+          <div class="node-progress-head">
+            <span class="node-progress-phase" id="panelUpdatePhase">подготовка</span>
+            <span class="node-progress-value" id="panelUpdatePercent">0%</span>
+          </div>
+          <div class="node-progress-rail"><i id="panelUpdateFill" style="width:0%"></i></div>
+        </div>
+
+        <div class="row" style="margin-top:16px">
+          <button class="btn primary" id="panelUpdateInstall" type="button" disabled>Обновить панель</button>
+        </div>
+
+        <label class="check" style="margin-top:14px">
+          <input type="checkbox" id="panelUpdateAutoCheck"> Проверять автоматически при запуске панели
+        </label>
+      </div>
+
       <!-- Веб-часть обновляется отдельно от установщика: без прав
            администратора и без остановки службы. -->
       <div class="card" style="margin-top:16px">

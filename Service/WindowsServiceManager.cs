@@ -25,6 +25,13 @@ public sealed class WindowsServiceManager
 
     public static string ServiceName => "DayZPulse";
 
+    /// <summary>
+    /// Запущен ли текущий процесс как служба Windows. Нужно помощнику обновления:
+    /// службу поднимает SCM (<c>sc start</c>), а трей — обычным запуском exe.
+    /// </summary>
+    public static bool IsWindowsServiceHost() =>
+        Microsoft.Extensions.Hosting.WindowsServices.WindowsServiceHelpers.IsWindowsService();
+
     public static string ServiceDisplayName => "DayZPulse — панель управления игровым сервером";
 
     public static string ServiceDescription =>

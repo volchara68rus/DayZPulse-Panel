@@ -73,6 +73,8 @@ public static class AppBootstrap
         builder.Services.AddSingleton<EngineMetricsService>();
         builder.Services.AddSingleton<DayZPulse.Web.WebUiUpdateService>();
         builder.Services.AddHostedService<DayZPulse.Web.WebUiCheckService>();
+        builder.Services.AddSingleton<DayZPulse.Web.PanelUpdateService>();
+        builder.Services.AddHostedService<DayZPulse.Web.PanelUpdateCheckService>();
 
         var memoryLogProvider = new InMemoryLogProvider(ParseLevel(settings.Current.Logging.MinimumLevel));
         builder.Services.AddSingleton(memoryLogProvider);

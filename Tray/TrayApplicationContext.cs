@@ -85,6 +85,9 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
         var lifecycle = _app.Services.GetRequiredService<AppLifecycle>();
         lifecycle.RestartRequestedEvent += (_, _) => _uiContext.Post(_ => RestartApplication(), null);
+        // Обновление панели: выходим, НЕ поднимая замену — файлы подменяет
+        // внешний помощник, он же запускает панель заново.
+        lifecycle.ApplyUpdateRequested += (_, _) => _uiContext.Post(_ => ExitForUpdate(), null);
 
         _pulseTimer = new System.Windows.Forms.Timer { Interval = 2000 };
         _pulseTimer.Tick += (_, _) => RefreshStatus();
@@ -413,6 +416,38 @@ internal sealed class TrayApplicationContext : ApplicationContext
             // Игнорируем.
         }
 
+        ExitThread();
+    }
+
+    /// <summary>
+    /// Выход для обновления панели: освобождаем файлы и завершаемся, не
+    /// поднимая новую копию — её запустит помощник обновления после подмены.
+    /// </summary>
+    private void ExitForUpdate()
+    {
+        _pulseTimer.Stop();
+        _notifyIcon.Visible = false;
+
+        try
+        {
+            _app.StopAsync(TimeSpan.FromSeconds(15)).GetAwaiter().GetResult();
+        }
+        catch
+        {
+            // Игнорируем ошибки остановки.
+        }
+
+        // Ждём чуть дольше, чтобы хост точно успел освободить файлы.
+        try
+        {
+            ((IAsyncDisposable)_app).DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
+        catch
+        {
+            // Игнорируем.
+        }
+
+        _notifyIcon.Dispose();
         ExitThread();
     }
 

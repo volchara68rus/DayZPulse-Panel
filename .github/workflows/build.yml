@@ -27,13 +27,11 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Публикация (self-contained, win-x64)
+      - name: Публикация (self-contained, win-x64, многофайловая)
         run: >
           dotnet publish DayZPulse.csproj
           -c Release -r win-x64 --self-contained true
-          -p:PublishSingleFile=true
-          -p:EnableCompressionInSingleFile=false
-          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:PublishSingleFile=false
           -o publish
 
       - name: Артефакт (portable)

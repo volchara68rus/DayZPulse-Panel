@@ -657,6 +657,57 @@ public static class ApiEndpoints
             return Results.Ok(new { ok = true, enabled = request.Enabled });
         });
 
+        // ------------------------------------- обновление панели (сам код, без установщика)
+
+        // Состояние обновления панели: локальная/удалённая версии, объём загрузки.
+        api.MapGet("/panel-update", async (DayZPulse.Web.PanelUpdateService panel, SettingsStore settings,
+            CancellationToken ct) =>
+        {
+            var state = await panel.GetStateAsync(ct);
+
+            return Results.Ok(new
+            {
+                baseUrl = panel.BaseUrl,
+                installedVersion = state.InstalledVersion,
+                remoteVersion = state.RemoteVersion,
+                remoteUpdated = state.Updated,
+                available = state.Available,
+                upToDate = state.UpToDate,
+                writable = state.Writable,
+                changedFiles = state.ChangedFiles,
+                downloadSize = state.DownloadSize,
+                autoCheck = settings.Current.PanelUpdate.AutoCheck,
+                lastUpdatedAt = settings.Current.PanelUpdate.UpdatedAt,
+                busy = state.Busy,
+                progress = state.Percent,
+                phase = state.Phase
+            });
+        });
+
+        // Скачать изменённые файлы панели и применить с перезапуском.
+        api.MapPost("/panel-update/install", async (DayZPulse.Web.PanelUpdateService panel,
+            AuditLog audit, HttpContext ctx) =>
+        {
+            var result = await panel.InstallAsync(ctx.RequestAborted);
+
+            if (!result.Success)
+            {
+                return Results.BadRequest(new { error = result.Error ?? "Не удалось обновить панель." });
+            }
+
+            audit.Write(Actor(ctx), "panel.install", "версия " + (result.Version ?? "?"), null);
+            return Results.Ok(new { ok = true, version = result.Version, restart = result.Restart });
+        });
+
+        // Включение/выключение автоматической проверки обновления панели.
+        api.MapPut("/panel-update/autocheck", (WebUiAutoCheckRequest request, SettingsStore settings,
+            AuditLog audit, HttpContext ctx) =>
+        {
+            settings.Update(s => s.PanelUpdate.AutoCheck = request.Enabled);
+            audit.Write(Actor(ctx), "panel.autocheck", request.Enabled ? "вкл" : "выкл", null);
+            return Results.Ok(new { ok = true, enabled = request.Enabled });
+        });
+
         // Выбор папки системным диалогом. Нужен и при первом запуске, и в настройках.
         api.MapPost("/system/pick-folder", (PickFolderRequest? request) =>
         {

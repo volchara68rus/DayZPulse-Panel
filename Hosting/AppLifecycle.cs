@@ -19,11 +19,26 @@ public sealed class AppLifecycle
     public event EventHandler? RestartRequestedEvent;
     public event EventHandler? ShutdownRequested;
 
+    /// <summary>
+    /// Запрошено «применить обновление и выйти»: приложение должно завершиться,
+    /// НЕ поднимая замену само, — файлы панели подменит внешний помощник и он же
+    /// запустит панель заново. Отдельный сигнал, чтобы не конфликтовать с
+    /// обычным перезапуском (который сам спавнит новый процесс).
+    /// </summary>
+    public event EventHandler? ApplyUpdateRequested;
+
     public void RequestRestart(string reason)
     {
         _logger.LogInformation("Запрошен перезапуск приложения: {Reason}", reason);
         Interlocked.Exchange(ref _restartRequested, 1);
         RestartRequestedEvent?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Применить обновление и выйти без самостоятельного перезапуска.</summary>
+    public void RequestApplyUpdate(string reason)
+    {
+        _logger.LogInformation("Обновление панели: выход для подмены файлов. {Reason}", reason);
+        ApplyUpdateRequested?.Invoke(this, EventArgs.Empty);
     }
 
     public void RequestShutdown(string reason)

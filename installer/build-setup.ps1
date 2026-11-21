@@ -29,8 +29,11 @@ $project   = Join-Path $root 'DayZPulse.csproj'
 
 if (-not (Test-Path $project)) { throw "Не найден проект: $project" }
 
-# 1. Публикация панели (один exe + wwwroot).
-Write-Host "==> Публикация панели (self-contained, win-x64)" -ForegroundColor Cyan
+# 1. Публикация панели (многофайловая: exe + dll + рантайм + wwwroot).
+#    Многофайловая раскладка нужна для обновления по изменённым файлам:
+#    при обновлении подменяется только DayZPulse.dll и пара служебных файлов,
+#    а не весь архив целиком (см. PanelUpdateService на стороне панели).
+Write-Host "==> Публикация панели (self-contained, win-x64, многофайловая)" -ForegroundColor Cyan
 if (Test-Path $appDir) { Remove-Item $appDir -Recurse -Force }
 New-Item -ItemType Directory -Path $appDir -Force | Out-Null
 
@@ -41,11 +44,10 @@ $publishArgs = @(
     '--self-contained', 'true',
     '-p:DebugType=None',
     '-p:DebugSymbols=false',
-    # Всё в один exe. Внутреннее сжатие выключено — финальное сжатие
-    # делает сам установщик (LZMA), так итоговый архив меньше.
-    '-p:PublishSingleFile=true',
-    '-p:EnableCompressionInSingleFile=false',
-    '-p:IncludeNativeLibrariesForSelfExtract=true',
+    # Многофайловая публикация: рантайм .NET отдельными файлами. Версия
+    # рантайма попадает в манифест обновления — если сайт собран под другой
+    # рантайм, панель это увидит.
+    '-p:PublishSingleFile=false',
     "-p:Version=$Version",
     "-p:InformationalVersion=$Version",
     '-o', $appDir
@@ -55,7 +57,7 @@ $publishArgs = @(
 & dotnet publish @publishArgs
 if ($LASTEXITCODE -ne 0) { throw "Публикация завершилась с кодом $LASTEXITCODE" }
 
-foreach ($required in @('DayZPulse.exe', 'wwwroot\index.html')) {
+foreach ($required in @('DayZPulse.exe', 'DayZPulse.dll', 'wwwroot\index.html')) {
     $path = Join-Path $appDir $required
     if (-not (Test-Path $path)) { throw "В папке публикации нет $required" }
 }

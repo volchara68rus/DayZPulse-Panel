@@ -9,6 +9,7 @@ public sealed class AppSettings
 {
     public WebSettings Web { get; set; } = new();
     public WebUiSettings WebUi { get; set; } = new();
+    public PanelUpdateSettings PanelUpdate { get; set; } = new();
     public AuthSettings Auth { get; set; } = new();
     public LoggingSettings Logging { get; set; } = new();
     public SteamSettings Steam { get; set; } = new();
@@ -259,6 +260,22 @@ public sealed class WebUiSettings
     public DateTimeOffset? UpdatedAt { get; set; }
 
     /// <summary>Проверять обновления веб-части автоматически при запуске.</summary>
+    public bool AutoCheck { get; set; } = true;
+}
+
+/// <summary>
+/// Обновление самой панели (исполняемые файлы), отдельно от веб-части и
+/// установщика. Веб-часть обновляется своим механизмом, здесь — только код.
+/// </summary>
+public sealed class PanelUpdateSettings
+{
+    /// <summary>Версия, до которой панель обновлялась в последний раз.</summary>
+    public string LastVersion { get; set; } = "";
+
+    /// <summary>Когда панель обновлялась в последний раз.</summary>
+    public DateTimeOffset? UpdatedAt { get; set; }
+
+    /// <summary>Проверять наличие обновления панели автоматически при запуске.</summary>
     public bool AutoCheck { get; set; } = true;
 }
 

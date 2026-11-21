@@ -1048,6 +1048,15 @@ function connectLive() {
                     showWebUiUpdateNotice(message.data.remoteVersion);
                 }
                 break;
+
+            case 'panel-update':
+                // Доступно обновление самой панели: отмечаем точку и, если
+                // открыт раздел службы, обновляем карточку.
+                if (message.data?.available && !message.data?.upToDate) {
+                    $('panelUpdateDot')?.classList.add('on');
+                    if (currentView === 'service') loadPanelUpdate();
+                }
+                break;
         }
     };
 
@@ -1121,7 +1130,7 @@ function loadCurrentView() {
         }
     }
     if (name === 'schedule') loadSchedule();
-    if (name === 'service') { loadService(); loadApplicationInfo(); loadWebUi(); }
+    if (name === 'service') { loadService(); loadApplicationInfo(); loadWebUi(); loadPanelUpdate(); }
     if (name === 'settings') loadSettings();
     if (name === 'security') { loadSecurity(); loadAudit(); }
     if (name === 'players') { Players.start(); Players.loadConfig(); Players.loadDatabase(); if (typeof Loadouts !== 'undefined') Loadouts.load(); }
@@ -4559,6 +4568,154 @@ $('webUiReset')?.addEventListener('click', () => {
 $('webUiAutoCheck')?.addEventListener('change', async (event) => {
     try {
         await api('/web-ui/autocheck', { method: 'PUT', body: { enabled: event.target.checked } });
+    } catch (error) {
+        toast('Не удалось сохранить', error.message, 'error');
+        event.target.checked = !event.target.checked;
+    }
+});
+
+/* ---------------------------------------- обновление панели (по файлам) */
+
+let panelUpdatePollTimer = null;
+let panelRestartNotice = null;
+
+/** Загружает состояние обновления панели и показывает доступность. */
+async function loadPanelUpdate() {
+    const info = $('panelUpdateInfo');
+    if (!info) return;
+
+    try {
+        const data = await api('/panel-update');
+        const updateAvailable = data.available && !data.upToDate;
+
+        const status = !data.available
+            ? 'сайт недоступен'
+            : !data.writable
+                ? 'нет прав на запись'
+                : updateAvailable ? 'доступно обновление' : 'актуальная версия';
+
+        const rows = [
+            ['Панель', 'версия ' + (data.installedVersion || '—')],
+            ['Обновления', status],
+            ['Источник', data.baseUrl || '—']
+        ];
+
+        if (updateAvailable) {
+            const size = formatBytes(data.downloadSize || 0);
+            rows.push(['Загрузка', `${data.changedFiles} файл(ов), ${size}`]);
+        }
+
+        info.textContent = '';
+        for (const [key, value] of rows) {
+            const dt = document.createElement('dt');
+            dt.textContent = key;
+            const dd = document.createElement('dd');
+            dd.textContent = value ?? '—';
+            info.appendChild(dt);
+            info.appendChild(dd);
+        }
+
+        const button = $('panelUpdateInstall');
+        button.disabled = !updateAvailable || !data.writable || data.busy;
+        button.textContent = updateAvailable ? 'Обновить панель' : 'Обновление не требуется';
+        $('panelUpdateDot').classList.toggle('on', updateAvailable && data.writable);
+
+        const auto = $('panelUpdateAutoCheck');
+        if (auto && document.activeElement !== auto) auto.checked = !!data.autoCheck;
+
+        if (data.busy) {
+            paintPanelUpdateProgress(data.progress, data.phase);
+            startPanelUpdatePoll();
+        }
+    } catch (error) {
+        info.textContent = 'Не удалось получить состояние: ' + error.message;
+    }
+}
+
+/** Запускает установку обновления панели: скачивание, затем перезапуск. */
+async function installPanelUpdate() {
+    try {
+        paintPanelUpdateProgress(0, 'подготовка');
+        startPanelUpdatePoll();
+        await api('/panel-update/install', { method: 'POST' });
+        // Панель уйдёт на перезапуск: ждём, пока она вернётся.
+        waitForPanelRestart();
+    } catch (error) {
+        clearInterval(panelUpdatePollTimer);
+        panelUpdatePollTimer = null;
+        $('panelUpdateProgress')?.classList.add('hidden');
+        toast('Не удалось обновить панель', error.message, 'error', 9000);
+        loadPanelUpdate();
+    }
+}
+
+function paintPanelUpdateProgress(percent, phase) {
+    $('panelUpdateProgress')?.classList.remove('hidden');
+    setText('panelUpdatePhase', phase || 'обновление');
+    setText('panelUpdatePercent', (percent ?? 0) + '%');
+    if ($('panelUpdateFill')) $('panelUpdateFill').style.width = (percent ?? 0) + '%';
+}
+
+function startPanelUpdatePoll() {
+    if (panelUpdatePollTimer) return;
+    panelUpdatePollTimer = setInterval(async () => {
+        try {
+            const data = await api('/panel-update');
+            paintPanelUpdateProgress(data.progress, data.phase);
+        } catch {
+            // Панель перезапускается — опрос временно недоступен, это норма.
+        }
+    }, 700);
+}
+
+/**
+ * Ждёт, пока панель перезапустится после обновления. Пока сервер не
+ * отвечает — показываем экран «перезапуск», затем перезагружаем страницу.
+ */
+function waitForPanelRestart() {
+    if (panelRestartNotice && document.body.contains(panelRestartNotice)) return;
+
+    panelRestartNotice = toast('Панель обновляется',
+        'Скачивание завершено, панель перезапускается. Страница обновится автоматически.',
+        'info', 0, { sticky: true });
+
+    let tries = 0;
+    const timer = setInterval(async () => {
+        tries++;
+        try {
+            const response = await fetch('/api/system/info', { cache: 'no-store' });
+            if (response.ok) {
+                clearInterval(timer);
+                window.location.reload();
+                return;
+            }
+        } catch {
+            // Ещё не поднялась — ждём дальше.
+        }
+        if (tries > 120) {
+            clearInterval(timer);
+            toast('Панель не ответила', 'Обновите страницу вручную через минуту.', 'warn', 0);
+        }
+    }, 2000);
+}
+
+$('panelUpdateCheck')?.addEventListener('click', async () => {
+    const button = $('panelUpdateCheck');
+    button.disabled = true;
+    button.textContent = 'Проверка…';
+    await loadPanelUpdate();
+    button.disabled = false;
+    button.textContent = 'Проверить обновление';
+});
+
+$('panelUpdateInstall')?.addEventListener('click', () => {
+    askConfirm('Скачать обновление панели и перезапустить её? Во время перезапуска панель будет недоступна несколько секунд.',
+        installPanelUpdate, 'Обновить и перезапустить');
+});
+
+$('panelUpdateAutoCheck')?.addEventListener('change', async (event) => {
+    try {
+        await api('/panel-update/autocheck', { method: 'PUT', body: { enabled: event.target.checked } });
     } catch (error) {
         toast('Не удалось сохранить', error.message, 'error');
         event.target.checked = !event.target.checked;

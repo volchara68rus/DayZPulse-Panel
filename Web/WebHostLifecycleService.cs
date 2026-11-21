@@ -27,6 +27,7 @@ public sealed class WebHostLifecycleService : BackgroundService
     {
         _lifecycle.RestartRequestedEvent += OnRestartRequested;
         _lifecycle.ShutdownRequested += OnShutdownRequested;
+        _lifecycle.ApplyUpdateRequested += OnApplyUpdateRequested;
         return Task.CompletedTask;
     }
 
@@ -42,6 +43,20 @@ public sealed class WebHostLifecycleService : BackgroundService
         _ = Task.Run(async () =>
         {
             await Task.Delay(700);
+            _lifetime.StopApplication();
+        });
+    }
+
+    /// <summary>
+    /// Обновление панели: просто завершаем процесс. Файлы подменит внешний
+    /// помощник (он же поднимет панель) — в режиме службы через <c>sc start</c>,
+    /// в режиме трея запуском exe. Сами ничего не перезапускаем.
+    /// </summary>
+    private void OnApplyUpdateRequested(object? sender, EventArgs e)
+    {
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(500);
             _lifetime.StopApplication();
         });
     }
