@@ -158,7 +158,8 @@ public static class AppBootstrap
                         QueueProcessingOrder = System.Threading.RateLimiting.QueueProcessingOrder.OldestFirst
                     }));
 
-            // Жёсткий лимит на попытки входа и создание владельца.
+            // Жёсткий лимит на попытки входа и создание владельца:
+            // применяется к /api/auth/login, /api/setup и /api/steam/login.
             options.AddPolicy("auth", context =>
                 System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
                     context.Connection.RemoteIpAddress?.ToString() ?? "local",

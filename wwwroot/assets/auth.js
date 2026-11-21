@@ -231,7 +231,7 @@ function initLogin() {
         const password = $('password').value;
 
         if (username.length < 1 || password.length < 1) {
-            showAlert(errorBox, 'Заполните имя владельца и пароль.');
+            showAlert(errorBox, 'Заполните имя администратора и пароль.');
             return;
         }
 
@@ -248,6 +248,12 @@ function initLogin() {
 
             if (result.data.code === 'setup_required') {
                 window.location.replace('/setup.html');
+                return;
+            }
+
+            if (result.status === 429) {
+                showAlert(errorBox, 'Слишком много попыток входа. Подождите несколько минут и попробуйте снова.');
+                $('password').value = '';
                 return;
             }
 

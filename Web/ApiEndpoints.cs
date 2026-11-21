@@ -917,7 +917,7 @@ public static class ApiEndpoints
                 webPort = port,
                 restartRequired = port != previousPort
             });
-        });
+        }).RequireRateLimiting("auth");
 
         app.MapPost("/api/auth/login", (LoginRequest request, SettingsStore settings, SessionTokens tokens,
             AuditLog audit, HttpContext ctx) =>
@@ -971,7 +971,7 @@ public static class ApiEndpoints
 
             audit.Write(loginName, "auth.login.success", adminOk ? "admin" : "owner", Remote(ctx));
             return Results.Ok(new { ok = true, user = loginName });
-        });
+        }).RequireRateLimiting("auth");
 
         app.MapPost("/api/auth/logout", (HttpContext ctx) =>
         {

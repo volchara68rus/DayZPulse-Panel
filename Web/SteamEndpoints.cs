@@ -181,7 +181,7 @@ public static class SteamEndpoints
 
             audit.Write(Actor(ctx), "steam.login", username, null);
             return Results.Ok(new { ok = true, message = "Вход выполняется." });
-        });
+        }).RequireRateLimiting("auth");
 
         // Код Steam Guard передаётся отдельным запросом, пока идёт вход.
         api.MapPost("/guard", (SteamGuardRequest request, SteamCmdService steam, HttpContext ctx) =>
