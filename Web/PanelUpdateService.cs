@@ -127,7 +127,11 @@ public sealed class PanelUpdateService
     {
         try
         {
-            var json = await Http.GetStringAsync($"{BaseUrl}/download/{ManifestName}", ct);
+            // Сайт за Cloudflare: он кеширует загрузки на часы, поэтому к
+            // адресу добавляем нестабильный параметр — иначе манифест мог бы
+            // подолгу отдаваться из кеша и обновление «не находилось».
+            var bust = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            var json = await Http.GetStringAsync($"{BaseUrl}/download/{ManifestName}?v={bust}", ct);
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
 
@@ -271,7 +275,7 @@ public sealed class PanelUpdateService
                 var tmpZip = Path.Combine(AppPaths.TempDirectory, "panel-" + Guid.NewGuid().ToString("n") + ".zip");
                 try
                 {
-                    using (var response = await Http.GetAsync($"{BaseUrl}/download/{ZipName}", ct))
+                    using (var response = await Http.GetAsync($"{BaseUrl}/download/{ZipName}?v={manifest.Archive!.Sha256}", ct))
                     {
                         response.EnsureSuccessStatusCode();
                         await using var output = File.Create(tmpZip);
@@ -320,7 +324,7 @@ public sealed class PanelUpdateService
                         ?? throw new InvalidOperationException("Некорректный путь в манифесте: " + file.Path);
                     Directory.CreateDirectory(Path.GetDirectoryName(target)!);
 
-                    var url = $"{BaseUrl}/download/panel/{file.Path.Replace('\\', '/')}";
+                    var url = $"{BaseUrl}/download/panel/{file.Path.Replace('\\', '/')}?v={file.Sha256}";
                     using (var response = await Http.GetAsync(url, ct))
                     {
                         response.EnsureSuccessStatusCode();

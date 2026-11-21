@@ -167,7 +167,10 @@ public sealed class WebUiUpdateService
     {
         try
         {
-            var json = await Http.GetStringAsync($"{BaseUrl}/download/{ManifestName}", ct);
+            // Сайт за Cloudflare кеширует загрузки: добавляем параметр, чтобы
+            // не получить устаревший манифест из кеша.
+            var bust = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            var json = await Http.GetStringAsync($"{BaseUrl}/download/{ManifestName}?v={bust}", ct);
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
 
@@ -246,7 +249,7 @@ public sealed class WebUiUpdateService
             var zipPath = Path.Combine(tmp, ZipName);
 
             Phase = "Скачивание веб-части";
-            using (var response = await Http.GetAsync($"{BaseUrl}/download/{ZipName}", ct))
+            using (var response = await Http.GetAsync($"{BaseUrl}/download/{ZipName}?v={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}", ct))
             {
                 response.EnsureSuccessStatusCode();
                 await using var file = File.Create(zipPath);

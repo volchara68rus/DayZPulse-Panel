@@ -76,7 +76,7 @@ public sealed class PanelModService
     {
         try
         {
-            var url = $"{BaseUrl}/download/{ManifestName}";
+            var url = $"{BaseUrl}/download/{ManifestName}?v={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
             var json = await Http.GetStringAsync(url, ct);
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
@@ -160,7 +160,7 @@ public sealed class PanelModService
             var zipPath = Path.Combine(tmp, ZipName);
 
             Phase = "Скачивание мода";
-            using (var response = await Http.GetAsync($"{BaseUrl}/download/{ZipName}", ct))
+            using (var response = await Http.GetAsync($"{BaseUrl}/download/{ZipName}?v={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}", ct))
             {
                 response.EnsureSuccessStatusCode();
                 await using var file = File.Create(zipPath);
